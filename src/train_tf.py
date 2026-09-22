@@ -23,6 +23,7 @@ Usage:
     python src/train_tf.py --arch dscnn --width 128 --depth 6 --mixup 0.2
     python src/train_tf.py --rebuild-cache          # recompute MFCC cache
     python src/train_tf.py --smoke                   # 1 epoch on a tiny subset
+    python src/train_tf.py --init kws_tf.keras --epochs 0 --qat   # QAT-fine-tune a checkpoint
 
 The int8 .tflite is the artifact you flash / import into Edge Impulse.
 
@@ -510,6 +511,49 @@ def export_tflite(model: tf.keras.Model, X_train: np.ndarray, out_dir: Path,
 
 
 # ---------------------------------------------------------------------------
+# 5b. Quantization-Aware Training (QAT)
+# ---------------------------------------------------------------------------
+# export_tflite() above does POST-training quantization (PTQ): finish a float
+# model, then squash it to int8 in one shot. QAT instead inserts "fake quant"
+# nodes so the model FEELS int8 rounding during a short fine-tune and learns
+# wider, rounding-robust margins. This targets the device-vs-PC mismatch on
+# borderline words (e.g. set_a_timer: ~90% on PC vs ~32% on the MCU) caused by
+# CMSIS-NN requantization rounding that desktop TFLite does not reproduce.
+
+def apply_qat(model: tf.keras.Model) -> tf.keras.Model:
+    """Wrap `model` with TFMOT fake-quant nodes for quantization-aware fine-tuning.
+
+    Tries whole-model quantization first; if TFMOT can't quantize some op, falls
+    back to annotating only the Conv2D / DepthwiseConv2D / Dense layers (the ones
+    that actually accumulate the int8 rounding error).
+    """
+    try:
+        import tensorflow_model_optimization as tfmot
+    except ImportError as e:
+        raise SystemExit(
+            "[error] --qat needs tensorflow-model-optimization. Install with "
+            f"`pip install tensorflow-model-optimization`. (import error: {e})"
+        )
+    q = tfmot.quantization.keras
+    try:
+        return q.quantize_model(model)
+    except Exception as e:                       # some op unsupported by TFMOT
+        print(f"[qat] whole-model quantize failed ({e});")
+        print("[qat] falling back to annotating conv/dense layers only")
+        heavy = (tf.keras.layers.Conv2D,
+                 tf.keras.layers.DepthwiseConv2D,
+                 tf.keras.layers.Dense)
+
+        def _annotate(layer):
+            if isinstance(layer, heavy):
+                return q.quantize_annotate_layer(layer)
+            return layer
+
+        annotated = tf.keras.models.clone_model(model, clone_function=_annotate)
+        return q.quantize_apply(annotated)
+
+
+# ---------------------------------------------------------------------------
 # 6. Reporting helpers
 # ---------------------------------------------------------------------------
 
@@ -612,6 +656,14 @@ def main() -> None:
                     help="Mixup alpha (0=off; try 0.2 to push accuracy).")
     ap.add_argument("--label-smoothing", type=float, default=0.0,
                     help="Softens hard labels (try 0.05).")
+    ap.add_argument("--qat", action="store_true",
+                    help="Fine-tune with Quantization-Aware Training before int8 "
+                         "export (makes the model robust to on-device int8 rounding). "
+                         "Pair with --init and --epochs 0 to QAT an existing checkpoint.")
+    ap.add_argument("--qat-epochs", type=int, default=5,
+                    help="Epochs for the QAT fine-tune phase (default 5).")
+    ap.add_argument("--qat-lr", type=float, default=2e-4,
+                    help="Learning rate for the QAT fine-tune (small; default 2e-4).")
     ap.add_argument("--allow-large", action="store_true",
                     help="Allow models above the nRF5340 size budget.")
     ap.add_argument("--init", default=None,
@@ -649,6 +701,11 @@ def main() -> None:
     args = ap.parse_args()
     if args.dropout is None:
         args.dropout = 0.2 if args.arch == "dscnn" else 0.3
+    if args.qat and not args.tag:
+        args.tag = "qat"    # keep QAT artifacts separate from the PTQ baseline
+    if args.epochs == 0 and not args.init:
+        raise SystemExit("[error] --epochs 0 only makes sense with --init "
+                         "(load a trained model, e.g. to --qat fine-tune it).")
 
     cfg = load_config()
     if args.sample_rate:                       # experiment: override audio sample rate
@@ -807,30 +864,67 @@ def main() -> None:
             monitor="val_accuracy", patience=16, restore_best_weights=True),
     ]
 
-    history = model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=args.epochs,
-        callbacks=callbacks,
-        verbose=2,
-    )
-
-    # --- loss / accuracy convergence curves (CSV + PNG) ---
-    save_training_curves(history, PROJECT_ROOT, tag=args.tag)
+    if args.epochs > 0:
+        history = model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=args.epochs,
+            callbacks=callbacks,
+            verbose=2,
+        )
+        # --- loss / accuracy convergence curves (CSV + PNG) ---
+        save_training_curves(history, PROJECT_ROOT, tag=args.tag)
+    else:
+        print("[train] epochs=0 -> skipping float training (using loaded model as-is)")
 
     # --- evaluate on held-out test set ---
     te_loss, te_acc = model.evaluate(Xte_eval, yte_eval, verbose=0)
-    print(f"\n[test] accuracy = {te_acc:.4f}")
+    print(f"\n[test] float accuracy = {te_acc:.4f}")
 
     if args.smoke:
         print("[smoke] OK — script runs end to end. Skipping export.")
         return
 
+    # --- Quantization-Aware Training (optional) ---
+    # Wrap the trained float model with fake-quant nodes and fine-tune briefly so
+    # it tolerates the int8 rounding done on the nRF5340 (CMSIS-NN). From here on
+    # `model` IS the QAT model, so the exported int8 tflite is the QAT result.
+    if args.qat:
+        print(f"\n[qat] wrapping with fake-quant + fine-tuning "
+              f"({args.qat_epochs} epochs @ lr={args.qat_lr})")
+        model = apply_qat(model)
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(args.qat_lr),
+            loss=loss,
+            metrics=["accuracy"],
+        )
+        qat_history = model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=args.qat_epochs,
+            callbacks=[tf.keras.callbacks.EarlyStopping(
+                monitor="val_accuracy",
+                patience=max(3, args.qat_epochs),
+                restore_best_weights=True)],
+            verbose=2,
+        )
+        save_training_curves(qat_history, PROJECT_ROOT,
+                             tag=f"{args.tag}_finetune")
+        te_loss, te_acc = model.evaluate(Xte_eval, yte_eval, verbose=0)
+        print(f"\n[qat] post-QAT accuracy = {te_acc:.4f}")
+
     cm = per_class_and_confusions(model, Xte, yte, labels)
 
     # --- export (all artifacts share the `base` name, so --tag keeps runs separate) ---
     model.save(ckpt)
-    sm_dir = export_saved_model(model, PROJECT_ROOT, name=f"{base}_savedmodel")
+    try:
+        sm_dir = export_saved_model(model, PROJECT_ROOT, name=f"{base}_savedmodel")
+        sm_name = sm_dir.name
+    except Exception as e:
+        # QAT (fake-quant-wrapped) models can fail SavedModel export; the int8
+        # tflite below is the artifact we actually flash, so don't abort.
+        print(f"[export] SavedModel export skipped ({e})")
+        sm_name = None
     float_path, int8_path = export_tflite(model, Xtr, PROJECT_ROOT, base=base)
 
     meta = {
@@ -854,16 +948,20 @@ def main() -> None:
             "arch": args.arch, "width": args.width, "depth": args.depth,
             "epochs": args.epochs, "mixup": args.mixup,
             "label_smoothing": args.label_smoothing,
+            "qat": bool(args.qat),
+            "qat_epochs": args.qat_epochs if args.qat else 0,
+            "qat_lr": args.qat_lr if args.qat else None,
         },
         "int8_tflite": int8_path.name,
-        "saved_model_dir": sm_dir.name,
+        "saved_model_dir": sm_name,
         "noise_aug": (f"copies={args.noise_copies},snr={args.snr_min}-{args.snr_max}dB"
                       if args.noise_aug else "none"),
         "n_params": int(model.count_params()),
     }
     Path(ckpt).with_suffix(".json").write_text(json.dumps(meta, indent=2))
+    sm_str = f"{sm_name}/, " if sm_name else ""
     print(f"[done] saved {ckpt.name}, {ckpt.with_suffix('.json').name}, "
-          f"{sm_dir.name}/, {float_path.name}, {int8_path.name}")
+          f"{sm_str}{float_path.name}, {int8_path.name}")
 
 
 if __name__ == "__main__":
