@@ -165,10 +165,13 @@ def main():
     py_pct = (py_out.astype(np.float32) - out_zp) * out_scale * 100.0
 
     print(f"\n[MODEL OUTPUT COMPARISON]")
-    print(f"{'label':<16}{'firmware int8':<15}{'firmware %':<12}{'python int8':<13}{'python %'}")
-    for i, label in enumerate(fw_output.keys()):
+    print(f"{'label':<16}{'fw int8':>8}{'fw %':>10}{'py int8':>10}{'py %':>10}{'delta int8':>12}")
+    labels = list(fw_output.keys())
+    for i, label in enumerate(labels):
         fw_i8, fw_pct = fw_output[label]
-        print(f"{label:<16}{fw_i8:<15}{fw_pct:<12.2f}{py_out[i]:<13}{py_pct[i]:.2f}")
+        delta = py_out[i] - fw_i8
+        flag = "  <-- !" if abs(delta) > 10 else ""
+        print(f"{label:<16}{fw_i8:>8}{fw_pct:>10.2f}{py_out[i]:>10}{py_pct[i]:>10.2f}{delta:>12}{flag}")
 
 
 if __name__ == "__main__":
