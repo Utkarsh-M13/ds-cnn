@@ -2,24 +2,47 @@
 processed/<label>/*.wav (16 kHz mono) -- the layout src/train_tf.py expects -- so the QAT
 fine-tune can run without Bisti's prebuilt mfcc_cache.npz.
 
+Confirmed schema (HF datasets-server): features are `audio` (raw bytes) and `label` (ClassLabel,
+30 classes). Splits: train 24000, test 6000. Label names already match the model's labels.
+
 Usage (on Anvil):
     pip install --user datasets soundfile numpy
     python fetch_dataset.py                      # writes ./processed/<label>/*.wav
-    python fetch_dataset.py --limit-per-label 50 # small subset for a quick smoke test
-
-Notes:
-- This is a first-pass arranger and has not been run against the real dataset yet. It prints the
-  dataset's splits, columns, and label names first, so if the schema differs we can adjust.
-- The 30 label folders must be named exactly as the model's labels (underscores, e.g.
-  volume_down, set_a_timer). The script replaces spaces with underscores to match.
+    python fetch_dataset.py --limit-per-label 5  # tiny subset to verify first
 """
 from __future__ import annotations
 
 import argparse
+import io
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+
+
+def decode_audio(v, target_sr: int) -> np.ndarray:
+    """Decode an example's audio value (raw bytes, or an Audio dict) to float32 mono @ target_sr."""
+    if isinstance(v, dict):
+        if v.get("array") is not None:                 # HF Audio feature (already decoded)
+            arr = np.asarray(v["array"], dtype=np.float32)
+            sr = int(v.get("sampling_rate", target_sr))
+        elif v.get("bytes") is not None:               # Audio(decode=False) -> {bytes, path}
+            arr, sr = sf.read(io.BytesIO(v["bytes"]), dtype="float32")
+        elif v.get("path"):
+            arr, sr = sf.read(v["path"], dtype="float32")
+        else:
+            raise ValueError(f"unrecognized audio dict keys: {list(v)}")
+    elif isinstance(v, (bytes, bytearray)):            # raw binary column (this dataset)
+        arr, sr = sf.read(io.BytesIO(v), dtype="float32")
+    else:
+        raise ValueError(f"unrecognized audio value type: {type(v)}")
+    if arr.ndim > 1:
+        arr = arr.mean(axis=1)
+    if sr != target_sr:                                # crude resample (dataset is already 16 kHz)
+        n = int(round(len(arr) * target_sr / sr))
+        arr = np.interp(np.linspace(0, len(arr), n, endpoint=False),
+                        np.arange(len(arr)), arr).astype(np.float32)
+    return arr.astype(np.float32)
 
 
 def main() -> None:
@@ -30,35 +53,22 @@ def main() -> None:
     ap.add_argument("--limit-per-label", type=int, default=0, help="0 = all clips")
     args = ap.parse_args()
 
-    from datasets import load_dataset, Audio, concatenate_datasets
+    from datasets import load_dataset, concatenate_datasets
 
     ds = load_dataset(args.dataset)
-    print("[info] splits:", list(ds.keys()))
-    parts = [ds[s] for s in ds.keys()]
-    data = concatenate_datasets(parts) if len(parts) > 1 else parts[0]
+    print("[info] splits:", {k: len(ds[k]) for k in ds})
+    data = concatenate_datasets([ds[s] for s in ds]) if len(ds) > 1 else ds[list(ds)[0]]
     print("[info] columns:", data.column_names)
 
-    feats = data.features
-    audio_col = next((c for c in data.column_names
-                      if feats[c].__class__.__name__ == "Audio"), None)
-    if audio_col is None and "audio" in data.column_names:
-        audio_col = "audio"
+    audio_col = "audio" if "audio" in data.column_names else data.column_names[0]
     label_col = next((c for c in data.column_names
-                      if c.lower() in ("label", "labels", "keyword", "word", "class")), None)
-    if audio_col is None or label_col is None:
-        raise SystemExit(f"[error] could not find audio/label columns in {data.column_names}")
-    print(f"[info] audio column: {audio_col}   label column: {label_col}")
-
-    names = getattr(feats[label_col], "names", None)  # ClassLabel -> list of names
+                      if c.lower() in ("label", "labels", "keyword", "word", "class")), "label")
+    names = getattr(data.features[label_col], "names", None)
     if names is not None:
         print(f"[info] {len(names)} labels:", names)
 
     def label_name(v):
-        if names is not None and isinstance(v, int):
-            return names[v]
-        return str(v)
-
-    data = data.cast_column(audio_col, Audio(sampling_rate=args.sr))
+        return names[v] if (names is not None and isinstance(v, int)) else str(v)
 
     out = Path(args.out)
     counts: dict[str, int] = {}
@@ -66,10 +76,11 @@ def main() -> None:
         lbl = label_name(ex[label_col]).strip().replace(" ", "_")
         if args.limit_per_label and counts.get(lbl, 0) >= args.limit_per_label:
             continue
-        a = ex[audio_col]
-        wav = np.asarray(a["array"], dtype=np.float32)
-        if wav.ndim > 1:
-            wav = wav.mean(axis=1)
+        try:
+            wav = decode_audio(ex[audio_col], args.sr)
+        except Exception as e:
+            print(f"[warn] skip clip {i} ({lbl}): {e}")
+            continue
         d = out / lbl
         d.mkdir(parents=True, exist_ok=True)
         sf.write(str(d / f"{counts.get(lbl, 0):05d}.wav"), wav, args.sr, subtype="PCM_16")
