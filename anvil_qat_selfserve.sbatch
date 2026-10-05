@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=kws_qat_selfserve
-#SBATCH --account=cis260440-ai      # from Bisti's notes; confirm it matches her working jobs
-#SBATCH --partition=ai              # H100 "AI" partition per Bisti's notes; confirm
+#SBATCH --account=cis260440-gpu
+#SBATCH --partition=gpu
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
-#SBATCH --time=03:00:00
+#SBATCH --time=01:30:00
 #SBATCH --output=qat_selfserve_%j.log
 
 set -uo pipefail

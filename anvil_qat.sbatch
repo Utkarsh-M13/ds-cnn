@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=kws_qat
-#SBATCH --account=cis260440-ai      # from Bisti's notes; she submits batch jobs, match her working account
-#SBATCH --partition=ai              # H100 "AI" partition per Bisti's notes; confirm with her job
+#SBATCH --account=cis260440-gpu
+#SBATCH --partition=gpu
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=02:00:00
+#SBATCH --time=00:30:00
 #SBATCH --output=qat_%j.log
 
 set -uo pipefail
