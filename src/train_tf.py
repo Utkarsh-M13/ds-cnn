@@ -447,6 +447,67 @@ def build_model(arch: str, input_shape, n_classes: int, width: int, depth: int,
     raise SystemExit(f"[error] unknown --arch {arch!r} (use cnn or dscnn)")
 
 
+def load_checkpoint(init: str, input_shape, n_classes: int, args) -> tf.keras.Model:
+    """Load a checkpoint to fine-tune, across Keras versions.
+
+    The normal path is tf.keras.models.load_model(). But QAT forces Keras 2
+    (TF_USE_LEGACY_KERAS=1, required by tensorflow-model-optimization), and a
+    checkpoint saved by Keras 3 cannot be deserialized under Keras 2. For that
+    case we use a version-agnostic weights bundle made by tools/export_weights.py:
+    a .weights.npz (raw arrays) plus a .arch.json (architecture). We rebuild the
+    same architecture here and set_weights(), which is immune to Keras serialization
+    differences.
+
+    Accepts either the .keras file (falls back to the sibling bundle if the direct
+    load fails) or the .weights.npz directly.
+    """
+    p = Path(init)
+
+    def _from_bundle(npz: Path) -> tf.keras.Model:
+        base = npz.name[:-len(".weights.npz")] if npz.name.endswith(".weights.npz") \
+            else npz.with_suffix("").name
+        arch_json = npz.parent / f"{base}.arch.json"
+        if arch_json.exists():
+            spec = json.loads(arch_json.read_text())
+            arch, width, depth = spec["arch"], spec["width"], spec["depth"]
+            dropout = spec.get("dropout", args.dropout)
+        else:
+            # No arch.json: trust the CLI flags (must match the trained model).
+            arch, width, depth, dropout = args.arch, args.width, args.depth, args.dropout
+            print(f"[model] {arch_json.name} not found; using --arch {arch} "
+                  f"--width {width} --depth {depth}")
+        model = build_model(arch, input_shape, n_classes,
+                            width=width, depth=depth, dropout=dropout)
+        data = np.load(npz)
+        model.set_weights([data[k] for k in data.files])
+        print(f"[model] rebuilt {arch} (width={width}, depth={depth}) and loaded "
+              f"{len(data.files)} weight arrays from {npz.name}")
+        return model
+
+    # Direct .npz bundle.
+    if p.name.endswith(".weights.npz"):
+        return _from_bundle(p)
+
+    # Try the normal full-model load; on failure fall back to the sibling bundle.
+    try:
+        return tf.keras.models.load_model(p)
+    except Exception as e:  # noqa: BLE001 - want any load failure to try the bridge
+        sibling = p.parent / f"{p.with_suffix('').name}.weights.npz"
+        if sibling.exists():
+            print(f"[model] load_model failed ({type(e).__name__}); "
+                  f"using weights bundle {sibling.name}")
+            return _from_bundle(sibling)
+        raise SystemExit(
+            f"[error] could not load {init} ({type(e).__name__}: {e}).\n"
+            f"        This is usually a Keras 3 checkpoint being loaded under Keras 2 "
+            f"(QAT uses TF_USE_LEGACY_KERAS=1).\n"
+            f"        Fix: export a version-agnostic bundle first, then point --init at it:\n"
+            f"          env -u TF_USE_LEGACY_KERAS python tools/export_weights.py {init}\n"
+            f"          python src/train_tf.py --init {p.with_suffix('').name}.weights.npz "
+            f"--epochs 0 --qat"
+        )
+
+
 def assert_mcu_budget(model: tf.keras.Model, allow_large: bool) -> None:
     n = int(model.count_params())
     # int8 flatbuffer is roughly params bytes + graph overhead
@@ -780,7 +841,7 @@ def main() -> None:
     # --- model ---
     if args.init:
         print(f"[model] fine-tuning from {args.init}")
-        model = tf.keras.models.load_model(args.init)
+        model = load_checkpoint(args.init, Xtr.shape[1:], len(labels), args)
         # architecture must match the checkpoint (same arch/width/depth)
     else:
         model = build_model(

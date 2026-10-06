@@ -29,5 +29,15 @@ if [ ! -d processed ]; then
   python fetch_dataset.py --out processed
 fi
 
-# 2. Build arm_f32 features and run the QAT fine-tune from the existing checkpoint
-python src/train_tf.py --init kws_tf.keras --epochs 0 --qat --rebuild-cache
+# 2. Bridge the Keras-3 checkpoint to a version-agnostic weights bundle.
+#    kws_tf.keras was saved by Keras 3; QAT below runs under Keras 2 (tfmot needs
+#    TF_USE_LEGACY_KERAS=1) and cannot load a Keras-3 file directly. We run this one
+#    step with the legacy flag UNSET so it loads under Keras 3, writing
+#    kws_tf.weights.npz + kws_tf.arch.json (plain numpy + JSON, any Keras can read).
+if [ ! -f kws_tf.weights.npz ]; then
+  env -u TF_USE_LEGACY_KERAS python tools/export_weights.py kws_tf.keras
+fi
+
+# 3. Build arm_f32 features (cached) and run the QAT fine-tune from the bundle.
+#    The MFCC cache from a prior run is reused if present; add --rebuild-cache to force.
+python src/train_tf.py --init kws_tf.weights.npz --epochs 0 --qat
