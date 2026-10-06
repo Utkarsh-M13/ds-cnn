@@ -11,7 +11,7 @@ If QAT's test accuracy holds up (and ideally its confidence rises on UNSEEN clip
 result is real. If test accuracy drops while train accuracy stays high, that is
 overfitting from the fine-tune.
 
-Run on Anvil in ~/ds-cnn with qatenv:
+Usage:
     python tools/eval_heldout.py \
         --cache mfcc_cache.npz \
         --ptq kws_tf_int8.tflite --qat kws_tf_qat_int8.tflite

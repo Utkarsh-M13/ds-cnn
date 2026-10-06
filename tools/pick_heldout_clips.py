@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Tier-2 prep: copy out HELD-OUT raw wavs (train_tf's test split) for the device test.
+"""Extract held-out raw wavs (train_tf's test split) as oracle source clips.
 
-The oracle before/after used TRAINING clips, and the two headline words saturated the
-int8 output (both chip and PC hit 127, so a "match" proves nothing). This pulls clips
-the QAT model never trained on, including mid-confidence words (search, five) that do
-NOT saturate, so the device-vs-PC gap is actually visible.
+The oracle baseline uses training clips, and the highest-confidence words saturate the
+int8 output (both chip and PC reach 127), which hides any rounding difference. This
+extracts clips the model never trained on, including mid-confidence words (for example
+search and five) that do not saturate, so the device-vs-PC gap stays visible.
 
-It reproduces train_tf's exact clip-level split (same labels order, same seed, same
-0.15/0.15 fractions) and copies, for each requested word, the first few clips that land
-in the TEST split. scp the output folder to the Mac, then bake them into the oracle.
+It reproduces train_tf's clip-level split (same label order, same seed, same val/test
+fractions) and copies, for each requested word, the first clips that land in the test
+split. Copy the output to the host that builds the firmware, then build the oracle from
+it with make_oracle_clips.py.
 
-Run on Anvil in ~/ds-cnn with qatenv:
+Usage:
     python tools/pick_heldout_clips.py --out heldout_clips \
         --words set_a_timer volume_down yes search five --per-word 1
 """
@@ -78,10 +79,8 @@ def main() -> None:
             picked.append((w, files[gi].name, dst.name))
             print(f"[pick] {w}: {files[gi].name}  (held-out) -> {dst}")
 
-    print(f"\n[done] {len(picked)} clips in {out}/  (all from the TEST split, never trained on)")
-    print("Next: scp this folder to the Mac, e.g.")
-    print(f"  scp -r x-umajithia@anvil.rcac.purdue.edu:ds-cnn/{args.out} "
-          f"/Users/utkarsh_m/Work/Snowball-Labs/ds-cnn/")
+    print(f"\n[done] {len(picked)} clips in {out}/  (all from the test split, never trained on)")
+    print("Copy this folder to the host that builds the firmware, then run make_oracle_clips.py on it.")
 
 
 if __name__ == "__main__":

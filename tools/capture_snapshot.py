@@ -50,10 +50,10 @@ def main() -> None:
         ser.write(b"snapshot\r\n")
         ser.flush()
 
-        # Read raw bytes in BIG chunks, not line-by-line. The firmware bursts the
-        # 32000-sample PCM dump fast; line-by-line reading can't drain the OS serial
-        # buffer in time and silently drops samples (saw 499/2000 lines). Chunked
-        # reads keep up; we split into lines only at the end.
+        # Read raw bytes in large chunks, not line-by-line. The firmware bursts the
+        # 32000-sample PCM dump fast; line-by-line reading cannot drain the OS serial
+        # buffer in time and silently drops samples. Chunked reads keep up; the buffer
+        # is split into lines only at the end.
         buf = bytearray()
         deadline = time.time() + args.timeout
         saw_end = False
