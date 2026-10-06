@@ -6,3 +6,5 @@ mfcc_cache.npz
 # Version-agnostic weights bundle made by tools/export_weights.py (regenerate, do not commit)
 *.weights.npz
 *.arch.json
+
+.DS_Store
