@@ -10,6 +10,7 @@
 
 set -uo pipefail
 module load modtree/gpu
+module load anaconda
 
 # One-time env (safe to re-run): TensorFlow + QAT toolkit + deps
 pip install --user "tensorflow[and-cuda]>=2.16" tensorflow-model-optimization numpy soundfile pyyaml

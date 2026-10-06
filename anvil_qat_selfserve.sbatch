@@ -10,6 +10,7 @@
 
 set -uo pipefail
 module load modtree/gpu
+module load anaconda
 
 # One-time env (safe to re-run). cmsisdsp builds a native extension and is REQUIRED for the
 # arm_f32 features the checkpoint was trained on.
