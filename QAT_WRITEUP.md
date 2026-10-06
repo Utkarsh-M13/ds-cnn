@@ -77,31 +77,68 @@ constraint that caused us grief later: **tfmot only works on Keras 2**, not Kera
   (Python 3.12) with all deps, plus `tf_keras` and `TF_USE_LEGACY_KERAS=1` so tfmot
   gets the Keras 2 it needs on a TF 2.16+ install.
 
-### 3.3 The run "finished" but produced nothing — the Keras 3 vs 2 bug
+### 3.3 The run "finished" but produced nothing — the Keras 3 vs 2 bug, and the weights bridge
 The job exited, but no model came out. The log showed it **crashed on the first real
 step**: loading the `kws_tf.keras` checkpoint.
 
-- Root cause: `kws_tf.keras` was **saved by Keras 3**, but QAT forces **Keras 2**
-  (via `TF_USE_LEGACY_KERAS=1`). Keras 2 cannot deserialize a Keras 3 file
-  (`TypeError: Could not deserialize class 'Functional'`).
-- So the checkpoint and QAT pull in opposite directions on the Keras version.
+**The conflict.** Two things wanted different versions of Keras. The saved model
+`kws_tf.keras` was written by **Keras 3**. QAT (the `tfmot` library) only runs on
+**Keras 2**, which is why the job set `TF_USE_LEGACY_KERAS=1`. When the job tried to
+open the Keras-3 file while forced into Keras-2 mode, it crashed with
+`TypeError: Could not deserialize class 'Functional'`. Keras 2 simply does not
+understand a file Keras 3 wrote. So the checkpoint and QAT pull in opposite directions
+on the Keras version.
 
-**The fix — a version-agnostic weights bridge:**
-- `tools/export_weights.py` runs under Keras 3, reads the model, and writes:
-  - `kws_tf.weights.npz` — the raw weight arrays (plain numpy), and
-  - `kws_tf.arch.json` — the architecture read back out of the model
-    (arch=dscnn, width=128, depth=8, dropout=0.2, 99x13x1 in, 30 classes).
-- `train_tf.py` now has `load_checkpoint()`: if a normal `load_model()` fails (or you
-  point `--init` at the `.npz`), it **rebuilds the architecture from `arch.json` and
-  calls `set_weights()`** with the numpy arrays. `get_weights`/`set_weights` are a flat
-  list of arrays and are identical across Keras 2 and 3, so this sidesteps the
-  serialization incompatibility entirely.
-- Verified on the Mac against the real checkpoint: rebuilt model predictions are
-  **byte-identical** to the original (max abs diff 0.0), even when deliberately passing
-  wrong width/depth flags (it reads `arch.json` and overrides them).
-- Re-ran on Anvil → produced `kws_tf_qat_int8.tflite` (220 KB). On the PC the QAT model
-  is actually *more* confident than PTQ (set_a_timer 99.6%, volume_down 99.6%,
-  yes 97.7%), a good sign it trained well.
+**Why loading across versions fails.** A `.keras` file is really two different things
+zipped together:
+1. **The architecture description** — a blueprint in JSON: "a Conv2D here with these
+   settings, then a BatchNorm, then...". This blueprint is written in each Keras
+   version's *own dialect*. Keras 3 uses class names and module paths
+   (`keras.src.models.functional`, `DTypePolicy`, ...) that **do not exist in Keras 2**,
+   so when Keras 2 reads the blueprint it hits names it has never heard of and gives up.
+   That is the crash.
+2. **The raw weights** — big tables of float numbers (the learned values). These are
+   plain numbers with no "version" to them at all.
+The crash is entirely in part 1 (the blueprint). Part 2 (the numbers) was never the
+problem.
+
+**The fix — a version-agnostic weights bridge.** Instead of asking Keras 2 to read
+Keras 3's blueprint, skip the blueprint and carry only the numbers across:
+- **Under Keras 3** (`tools/export_weights.py`): open the model and pull out just the
+  two safe things — the raw weights as plain NumPy arrays (`model.get_weights()`,
+  87 arrays here) saved to `kws_tf.weights.npz`, and a tiny neutral spec of the shape
+  saved to `kws_tf.arch.json` (`arch=dscnn, width=128, depth=8, dropout=0.2,
+  99x13x1 in, 30 classes`). That JSON is *our own* plain description, not Keras's
+  dialect. The script reads the shape *out of the model itself* so it can never record
+  the wrong architecture.
+- **Under Keras 2** (the QAT run, via `train_tf.py`'s `load_checkpoint()`): do not load
+  the old file at all. Read `arch.json` and **rebuild the model fresh** with the
+  project's own `build_dscnn()`. Because Keras 2 builds it from scratch with its own
+  code, the blueprint is automatically in Keras-2 dialect — no translation needed. Then
+  pour the numbers back in with `model.set_weights(...)`.
+
+**Why it is immune to the version gap.** `get_weights()`/`set_weights()` are just "hand
+me the list of number-tables" / "take these number-tables back." That interface is
+identical in Keras 2 and 3, and NumPy arrays do not care about Keras at all. The only
+thing crossing the version boundary is a pile of plain numbers, never any
+version-specific blueprint. `set_weights` matches the arrays to layers **in order**, so
+the rebuilt model must have the same layers in the same order as the original — which it
+does, because it is rebuilt by the same `build_dscnn()` fed the same width/depth from
+`arch.json`.
+
+Analogy: the old file is a document in a word processor the new software cannot open.
+Rather than fight the format, you copy out the plain text (the numbers) and retype the
+layout fresh in the new program (rebuild the architecture), then paste the text in. The
+layout description never has to survive the jump, only the content does.
+
+**Verified lossless.** On the Mac, against the real checkpoint: load the original,
+rebuild-from-bridge, run both on the same input — predictions **identical, max abs diff
+0.0**. The test deliberately passed wrong width/depth flags and it still rebuilt
+correctly, because it reads the true shape from `arch.json`.
+
+Re-ran on Anvil → produced `kws_tf_qat_int8.tflite` (220 KB). On the PC the QAT model is
+actually *more* confident than PTQ (set_a_timer 99.6%, volume_down 99.6%, yes 97.7%), a
+good sign it trained well.
 
 ### 3.4 Built the firmware self-sufficiently
 The firmware depends on the Zephyr `tflite-micro` module, which was never committed to
