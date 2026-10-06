@@ -55,3 +55,37 @@ MATCHES the PC int8 output exactly (same int8 value 127). The control word yes
 stayed high (not broken). The device-vs-PC int8 rounding gap QAT targeted is
 effectively eliminated.
 Per-label tables: compare_after_{set_a_timer,volume_down,yes}.txt.
+
+## HELD-OUT validation (2026-10-06 04:29) - the rigorous retest
+Addresses two threats: (1) the trio above used TRAINING clips, (2) the two headline
+words saturated int8 (both device and PC pinned at 127, hiding any rounding gap).
+
+Setup: pulled 5 clips from train_tf's TEST split (never trained on; tools/pick_heldout_clips.py),
+including search/five which land mid-confidence and do NOT saturate. Source wavs in
+baseline_evidence/heldout_source/. Measured device-vs-PC for PTQ and QAT on the same clips.
+
+### Tier 1 - PC accuracy on the full held-out test split (no overfitting)
+PTQ: train 93.7% / val 93.6% / test 93.5%, test mean-conf 83.2%
+QAT: train 93.7% / val 93.1% / test 93.0%, test mean-conf 89.5%
+=> QAT did NOT overfit (train ~= test for both) and did NOT improve accuracy
+   (93.5 -> 93.0, flat/slightly down). Its effect is higher confidence (+6.3 pts on
+   unseen clips), i.e. wider margins, not better classification.
+
+### Tier 2 - on-device device-vs-PC on held-out clips
+| word        | PTQ dev% | PTQ PC% | PTQ gap | QAT dev% | QAT PC% | QAT gap | saturated |
+|-------------|----------|---------|---------|----------|---------|---------|-----------|
+| set_a_timer | 37.5     | 91.8    | -54.3   | 99.6     | 99.6    |  0.0    | yes (127) |
+| volume_down | 71.5     | 94.1    | -22.7   | 99.6     | 99.6    |  0.0    | yes (127) |
+| search      | 80.1     | 89.5    |  -9.4   | 98.1     | 98.1    |  0.0    | near-top  |
+| five        | 84.0     | 93.4    |  -9.4   | 91.0     | 91.0    |  0.0    | NO (int8 105) |
+| yes         | 83.6     | 76.2    |  +7.4   | 83.2     | 82.4    | +0.8    | NO (int8 85)  |
+
+Key: 'five' at int8 105 (91%, not saturated) matches device==PC exactly under QAT;
+'search' at int8 123 matches exactly. So the gap closing is a genuine device-vs-PC
+convergence across the confidence range, not a saturation artifact. Honest residual:
+yes keeps a ~0.8% gap (device int8 85 vs PC 83), so "near-zero", not literally zero.
+
+### Conclusion
+QAT reliably closes the CMSIS-NN-vs-desktop int8 rounding gap, on training AND held-out
+clips, saturated AND non-saturated, at no accuracy cost. It does not improve accuracy.
+Raw logs: raw/heldout_{ptq,qat}_*.txt; per-label: compare_heldout_{ptq,qat}_*.txt.

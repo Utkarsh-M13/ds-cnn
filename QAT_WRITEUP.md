@@ -220,7 +220,58 @@ comparison tables (`compare_*.txt`), the mic finding, and `results.md`.
 
 ---
 
-## 5. How to reproduce
+## 5. Validation: threats to validity and the held-out retest
+
+The result in section 4 was measured with the oracle, which (per the firmware's own
+history) feeds TRAINING clips, and the two headline words saturated int8 (device and PC
+both pinned at the max value 127, which hides any rounding difference). Two fair
+objections follow: the numbers could reflect memorization, and "gap = 0" could be a
+saturation artifact. We retested to settle both.
+
+### 5.1 Tier 1 - accuracy on the full held-out test split (overfitting check)
+Ran both int8 models on train_tf's internal test split (clips the QAT fine-tune never
+saw), with train_tf's exact preprocessing (`tools/eval_heldout.py`):
+
+| metric                 | PTQ   | QAT   |
+|------------------------|-------|-------|
+| train accuracy         | 93.7% | 93.7% |
+| test accuracy          | 93.5% | 93.0% |
+| test mean confidence   | 83.2% | 89.5% |
+
+Findings: train approx test for both, so no overfitting. QAT did NOT improve accuracy
+(93.5 -> 93.0, flat to slightly down). Its measurable effect is higher confidence
+(+6.3 points) on UNSEEN clips, i.e. wider margins, not better classification.
+
+### 5.2 Tier 2 - on-device device-vs-PC on held-out clips (saturation check)
+Pulled 5 test-split clips (`tools/pick_heldout_clips.py`), including `search` and `five`
+which sit mid-confidence and do NOT saturate, baked them into the oracle, and measured
+device-vs-PC for both models on the same clips:
+
+| word        | PTQ dev% | PTQ PC% | PTQ gap | QAT dev% | QAT PC% | QAT gap | saturated |
+|-------------|----------|---------|---------|----------|---------|---------|-----------|
+| set_a_timer | 37.5     | 91.8    | -54.3   | 99.6     | 99.6    |  0.0    | yes (127) |
+| volume_down | 71.5     | 94.1    | -22.7   | 99.6     | 99.6    |  0.0    | yes (127) |
+| search      | 80.1     | 89.5    |  -9.4   | 98.1     | 98.1    |  0.0    | near-top  |
+| five        | 84.0     | 93.4    |  -9.4   | 91.0     | 91.0    |  0.0    | NO (int8 105) |
+| yes         | 83.6     | 76.2    |  +7.4   | 83.2     | 82.4    | +0.8    | NO (int8 85)  |
+
+`five` at int8 105 (91%, clearly below the 127 ceiling) matches device==PC exactly under
+QAT, and `search` at int8 123 matches exactly. So the gap closing is a real device-vs-PC
+convergence across the confidence range, not a saturation artifact. Honest residual:
+`yes` keeps a ~0.8% gap (device int8 85 vs PC 83), so the claim is near-zero, not
+literally zero everywhere.
+
+### 5.3 Verdict after validation
+QAT reliably closes the CMSIS-NN-vs-desktop int8 rounding gap, on training AND held-out
+clips, saturated AND non-saturated, and the effect generalizes (Tier 1). It does this at
+no accuracy cost. It does NOT improve classification accuracy. The correct one-line
+claim is: *QAT makes the on-device int8 output agree with the PC and recovers on-device
+confidence, at no accuracy cost.* Evidence: `baseline_evidence/results.md`, the
+`heldout_*` raw logs, and `compare_heldout_*` tables.
+
+---
+
+## 6. How to reproduce
 
 1. Produce the QAT model on Anvil:
    ```
@@ -246,7 +297,7 @@ comparison tables (`compare_*.txt`), the mic finding, and `results.md`.
 
 ---
 
-## 6. Honest caveats
+## 7. Honest caveats
 
 - **Scope:** measured on three oracle clips (one example per word), not a full test-set
   accuracy sweep. It proves the on-device int8 rounding behavior cleanly, but it is not
@@ -263,7 +314,7 @@ comparison tables (`compare_*.txt`), the mic finding, and `results.md`.
 
 ---
 
-## 7. Files that matter
+## 8. Files that matter
 
 Training repo (`ds-cnn`, fork `Utkarsh-M13/ds-cnn`, branch `qat-experiment`):
 - `src/train_tf.py` — QAT step + `load_checkpoint()` weights bridge.

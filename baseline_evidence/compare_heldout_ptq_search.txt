@@ -1,0 +1,53 @@
+/Users/utkarsh_m/dscnn-venv/lib/python3.12/site-packages/tensorflow/lite/python/interpreter.py:457: UserWarning:     Warning: tf.lite.Interpreter is deprecated and is scheduled for deletion in
+    TF 2.20. Please use the LiteRT interpreter from the ai_edge_litert package.
+    See the [migration guide](https://ai.google.dev/edge/litert/migration)
+    for details.
+    
+  warnings.warn(_INTERPRETER_DELETION_WARNING)
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+[parse] 32000 PCM samples, (99, 13) MFCC grid, 30 output classes from firmware log
+[int8 sample] Firmware first 20 input tensor values: [-128, 98, 98, 98, 98, 98, 98, 98, 98, 98, 98, 98, 98, -128, 98, 98, 98, 98, 98, 98]
+
+[amplitude] snapshot RMS: -27.6 dBFS  (training target: -20.0 dBFS)
+            delta: -7.6 dB  -> moderate mismatch (may reduce confidence slightly)
+[python] recomputed MFCC shape: (99, 13)
+
+[MFCC COMPARISON]
+  max abs diff       : 0.000061
+  mean abs diff      : 0.000005
+  worst mismatch at frame=0 coef=0: firmware=-135.363754 python=-135.363815
+  -> MFCC stage matches. Bug (if any) is downstream: normalization/quant/model.
+[int8 sample] Python first 20 input tensor values: [np.int8(-128), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(-128), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98), np.int8(98)]
+
+[MODEL OUTPUT COMPARISON]
+label           firmware int8  firmware %  python int8  python %
+answer          -127           0.39        -127         0.39
+back            -127           0.39        -127         0.39
+call            -128           0.00        -128         0.00
+close           -122           2.34        -124         1.56
+eight           -128           0.00        -128         0.00
+five            -126           0.78        -127         0.39
+four            -126           0.78        -127         0.39
+help            -127           0.39        -128         0.00
+left            -127           0.39        -127         0.39
+next            -126           0.78        -127         0.39
+nine            -127           0.39        -127         0.39
+no              -127           0.39        -127         0.39
+one             -127           0.39        -128         0.00
+open            -127           0.39        -128         0.00
+play            -126           0.78        -127         0.39
+previous        -126           0.78        -127         0.39
+record          -127           0.39        -127         0.39
+right           -127           0.39        -127         0.39
+search          77             80.08       101          89.45
+set_a_timer     -125           1.17        -127         0.39
+seven           -125           1.17        -126         0.78
+six             -125           1.17        -126         0.78
+start           -124           1.56        -126         0.78
+stop            -127           0.39        -128         0.00
+three           -123           1.95        -125         1.17
+two             -127           0.39        -127         0.39
+volume_down     -127           0.39        -128         0.00
+volume_up       -127           0.39        -128         0.00
+yes             -127           0.39        -128         0.00
+zero            -126           0.78        -127         0.39
