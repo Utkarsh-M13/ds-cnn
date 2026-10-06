@@ -17,11 +17,15 @@ Run on Anvil in ~/ds-cnn with qatenv:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
+import sys
 from pathlib import Path
 
 import numpy as np
 
+# config.py lives in src/ (train_tf.py imports it the same way when run from there)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from config import load_config, PROCESSED_DIR
 
 
