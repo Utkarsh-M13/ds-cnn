@@ -20,6 +20,7 @@ module load modtree/gpu
 module load anaconda
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$HOME/qatenv"
+export TF_USE_LEGACY_KERAS=1   # tensorflow-model-optimization (QAT) needs Keras 2, not Keras 3
 
 cd "$SLURM_SUBMIT_DIR"   # run from inside the ds-cnn folder
 
