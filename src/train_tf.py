@@ -896,6 +896,12 @@ def main() -> None:
     if args.sample_rate:                       # experiment: override audio sample rate
         cfg["audio"]["sample_rate"] = int(args.sample_rate)
         print(f"[audio] sample_rate overridden -> {args.sample_rate} Hz")
+    if args.frame_stride_ms is not None:        # experiment: skip-frame stride
+        # Must update cfg (not just p) so make_frontend builds the arm frontend
+        # with the new stride; otherwise it keeps the config's stride and the
+        # feature frame count mismatches p.num_frames.
+        cfg["mfcc_reference"]["frame_stride_ms"] = float(args.frame_stride_ms)
+        print(f"[mfcc] frame_stride_ms overridden -> {args.frame_stride_ms} ms")
     seed = cfg["sampling"]["seed"]
     tf.random.set_seed(seed)
     np.random.seed(seed)
