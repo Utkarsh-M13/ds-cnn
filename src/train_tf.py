@@ -756,6 +756,10 @@ def main() -> None:
                     help="Override audio sample_rate from config (e.g. 8000). "
                          "Changes the features, so use with --rebuild-cache and a "
                          "separate --cache/--tag.")
+    ap.add_argument("--frame-stride-ms", type=float, default=0.0,
+                    help="Override MFCC frame_stride_ms from config (e.g. 40 for the "
+                         "skip-frame variant: ~50 frames instead of 99). Changes the "
+                         "features, so use with --rebuild-cache and a separate --cache/--tag.")
     ap.add_argument("--cache", default="",
                     help="Path to the MFCC feature cache (default mfcc_cache.npz). "
                          "Use a separate file per experiment, e.g. --cache mfcc_cache_8khz.npz.")
@@ -772,6 +776,9 @@ def main() -> None:
     if args.sample_rate:                       # experiment: override audio sample rate
         cfg["audio"]["sample_rate"] = int(args.sample_rate)
         print(f"[audio] sample_rate overridden -> {args.sample_rate} Hz")
+    if args.frame_stride_ms:                    # experiment: skip-frame variant
+        cfg["mfcc_reference"]["frame_stride_ms"] = float(args.frame_stride_ms)
+        print(f"[mfcc] frame_stride_ms overridden -> {args.frame_stride_ms} ms")
     seed = cfg["sampling"]["seed"]
     tf.random.set_seed(seed)
     np.random.seed(seed)
