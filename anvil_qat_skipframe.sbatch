@@ -5,7 +5,7 @@
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
-#SBATCH --time=04:00:00
+#SBATCH --time=00:30:00
 #SBATCH --output=qat_skipframe_%j.log
 
 set -uo pipefail
