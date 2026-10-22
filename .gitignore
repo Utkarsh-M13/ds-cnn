@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 kws-code.zip
+*.tar.gz
 mfcc_cache.npz
 
 # Version-agnostic weights bundle made by tools/export_weights.py (regenerate, do not commit)
@@ -8,3 +9,8 @@ mfcc_cache.npz
 *.arch.json
 
 .DS_Store
+
+# Full Anvil dumps: keep only int8 + json + confusion matrix under runs/
+runs/**/kws_tf.keras
+runs/**/kws_tf_float.tflite
+runs/**/kws_tf_savedmodel/

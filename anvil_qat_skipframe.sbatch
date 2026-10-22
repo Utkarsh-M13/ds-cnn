@@ -28,12 +28,11 @@ if [ ! -d processed ]; then
   python fetch_dataset.py --out processed
 fi
 
-# 2. Skip-frame (FrameSkip) variant: DS-CNN width 64, depth 4, MFCC stride 40 ms
-#    (~50 frames instead of 99), the lowest-latency variant. No trained float
-#    checkpoint exists for it, so train fresh then QAT fine-tune in one run.
-#    Recipe matches Bisti's 87.69% skip-frame run (runs/skip_frame on her main):
-#    80 epochs + mixup 0.2. Builds a 50-frame cache, tags artifacts "skipframe".
-#    Output (the deployable QAT model): kws_tf_skipframe_int8.tflite
+# 2. Skip-frame (FrameSkip) variant on Bisti's synced pipeline: DS-CNN width 64,
+#    depth 4, MFCC stride 40 ms (~50 frames). Recipe matches her 87.69% run
+#    (runs/skip_frame on her main): 80 epochs + mixup 0.2. The --qat step we added
+#    fine-tunes the trained float model so the int8 export is the QAT result.
+#    Output (the deployable QAT model): runs/skip_frame_qat/kws_tf_int8.tflite
 python src/train_tf.py --arch dscnn --width 64 --depth 4 \
-  --frame-stride-ms 40 --epochs 80 --mixup 0.2 --qat \
-  --rebuild-cache --cache mfcc_cache_skipframe.npz --tag skipframe
+  --frame-stride-ms 40 --epochs 80 --mixup 0.2 \
+  --run-name skip_frame_qat --qat --rebuild-cache
