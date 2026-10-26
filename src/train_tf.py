@@ -790,6 +790,63 @@ def save_training_curves(history, out_dir: Path, tag: str = "") -> None:
 # main
 # ---------------------------------------------------------------------------
 
+def load_checkpoint(init: str, input_shape, n_classes: int, args) -> tf.keras.Model:
+    """Load a checkpoint to fine-tune, across Keras versions.
+
+    The normal path is tf.keras.models.load_model(). But QAT forces Keras 2
+    (TF_USE_LEGACY_KERAS=1, required by tensorflow-model-optimization), and a
+    checkpoint saved by Keras 3 cannot be deserialized under Keras 2. For that
+    case we use a version-agnostic weights bundle made by tools/export_weights.py:
+    a .weights.npz (raw arrays) plus a .arch.json (architecture). We rebuild the
+    same architecture here and set_weights(), which is immune to Keras serialization
+    differences.
+
+    Accepts either the .keras file (falls back to the sibling bundle if the direct
+    load fails) or the .weights.npz directly.
+    """
+    p = Path(init)
+
+    def _from_bundle(npz: Path) -> tf.keras.Model:
+        base = npz.name[:-len(".weights.npz")] if npz.name.endswith(".weights.npz") \
+            else npz.with_suffix("").name
+        arch_json = npz.parent / f"{base}.arch.json"
+        if arch_json.exists():
+            spec = json.loads(arch_json.read_text())
+            arch, width, depth = spec["arch"], spec["width"], spec["depth"]
+            dropout = spec.get("dropout", args.dropout)
+        else:
+            arch, width, depth, dropout = args.arch, args.width, args.depth, args.dropout
+            print(f"[model] {arch_json.name} not found; using --arch {arch} "
+                  f"--width {width} --depth {depth}")
+        model = build_model(arch, input_shape, n_classes,
+                            width=width, depth=depth, dropout=dropout)
+        data = np.load(npz)
+        model.set_weights([data[k] for k in data.files])
+        print(f"[model] rebuilt {arch} (width={width}, depth={depth}) and loaded "
+              f"{len(data.files)} weight arrays from {npz.name}")
+        return model
+
+    if p.name.endswith(".weights.npz"):
+        return _from_bundle(p)
+
+    try:
+        return tf.keras.models.load_model(p)
+    except Exception as e:  # noqa: BLE001 - want any load failure to try the bridge
+        sibling = p.parent / f"{p.with_suffix('').name}.weights.npz"
+        if sibling.exists():
+            print(f"[model] load_model failed ({type(e).__name__}); "
+                  f"using weights bundle {sibling.name}")
+            return _from_bundle(sibling)
+        raise SystemExit(
+            f"[error] could not load {init} ({type(e).__name__}: {e}).\n"
+            f"        Likely a Keras 3 checkpoint under Keras 2 (QAT sets "
+            f"TF_USE_LEGACY_KERAS=1). Export a bundle first, then --init it:\n"
+            f"          env -u TF_USE_LEGACY_KERAS python tools/export_weights.py {init}\n"
+            f"          python src/train_tf.py --init {p.with_suffix('').name}.weights.npz "
+            f"--epochs 0 --qat"
+        )
+
+
 def apply_qat(model: tf.keras.Model) -> tf.keras.Model:
     """Wrap `model` with TFMOT fake-quant nodes for quantization-aware fine-tuning.
 
@@ -1002,8 +1059,7 @@ def main() -> None:
     # --- model ---
     if args.init:
         print(f"[model] fine-tuning from {args.init}")
-        model = tf.keras.models.load_model(args.init)
-        # architecture must match the checkpoint (same arch/width/depth)
+        model = load_checkpoint(args.init, Xtr.shape[1:], len(labels), args)
     else:
         model = build_model(
             args.arch, Xtr.shape[1:], len(labels),
@@ -1091,16 +1147,17 @@ def main() -> None:
             monitor="val_accuracy", patience=16, restore_best_weights=True),
     ]
 
-    history = model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=args.epochs,
-        callbacks=callbacks,
-        verbose=2,
-    )
-
-    # --- loss / accuracy convergence curves (CSV + PNG) ---
-    save_training_curves(history, PROJECT_ROOT, tag=args.tag)
+    # Skip float training when --epochs 0 (e.g. QAT-only on a loaded checkpoint).
+    if args.epochs > 0:
+        history = model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=args.epochs,
+            callbacks=callbacks,
+            verbose=2,
+        )
+        # --- loss / accuracy convergence curves (CSV + PNG) ---
+        save_training_curves(history, PROJECT_ROOT, tag=args.tag)
 
     # --- evaluate on held-out test set ---
     te_loss, te_acc = model.evaluate(Xte_eval, yte_eval, verbose=0)
