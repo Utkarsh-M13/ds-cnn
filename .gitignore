@@ -8,9 +8,13 @@ processed/
 processed_v2/
 
 # Full Anvil dumps: keep only int8 + json + confusion matrix under runs/
-# Exception: skip_frame float checkpoint is needed for QAT.
+# Exception: skip-frame float checkpoints are needed for QAT.
 runs/**/kws_tf.keras
 runs/**/kws_tf_float.tflite
 runs/**/kws_tf_savedmodel/
 !runs/skip_frame/kws_tf.keras
 !runs/skip_frame/kws_tf_savedmodel/
+!runs/skip_frame_v2/kws_tf.keras
+!runs/skip_frame_v2/kws_tf_savedmodel/
+!runs/baseline_v2/kws_tf.keras
+!runs/baseline_v2/kws_tf_savedmodel/

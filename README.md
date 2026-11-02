@@ -1,10 +1,25 @@
 # DS-CNN Keyword Spotting — Model Variant Study
 
-TensorFlow DS-CNN trained for 30-class keyword spotting, targeting the nRF5340 microcontroller via TFLite-Micro. This repo contains six trained variants that explore the accuracy–latency–size tradeoff across three axes: model width, temporal resolution, and input sample rate.
+TensorFlow DS-CNN trained for 30-class keyword spotting, targeting the nRF5340 microcontroller via TFLite-Micro.
+
+Current training set is [snowballlab/30-keywords-v2](https://huggingface.co/datasets/snowballlab/30-keywords-v2): 16 kHz mono, **1 s** clips, 1,000 per class. Classes drop `volume_up` / `volume_down` / `set_a_timer` and add `up` / `down` / `go`. The older 2 s runs below are kept for comparison.
 
 ---
 
-## Results
+## Results (v2, 1 s clips)
+
+| Variant | Test Acc | Parameters | int8 Size | Input Frames | Width | Depth | Sample Rate |
+|---|---|---|---|---|---|---|---|
+| **baseline_v2** | **90.88%** | 120,862 | ~142 KB | **49** | 128 | 6 | 16 kHz |
+| **skip_frame_v2** | **81.30%** | 25,502 | ~30 KB | **25** | 64 | 4 | 16 kHz |
+
+Same architectures as the original baseline (128×6, 20 ms stride) and skip-frame (64×4, 40 ms stride). Shorter clips cut the MFCC grid from 99→49 frames (baseline) and 50→25 frames (skip-frame).
+
+QAT should start from the float checkpoints in `runs/baseline_v2/` and `runs/skip_frame_v2/` (`kws_tf.keras` + `kws_tf_savedmodel/` + `kws_tf.json`). Firmware still assumes a 2 s / 99-frame window until `dsp_constants.h` and the on-device capture length are updated to match.
+
+---
+
+## Results (original, 2 s clips)
 
 | Variant | Test Acc | Parameters | int8 Size | Input Frames | Width | Depth | Sample Rate | Est. MCU Latency |
 |---|---|---|---|---|---|---|---|---|
@@ -133,7 +148,9 @@ ds-cnn/
 ├── slurm/                    SLURM batch scripts for Anvil HPC
 │
 └── runs/                     trained variants (flash one folder at a time)
-    ├── baseline/             128×6, 16 kHz, 91.56%
+    ├── baseline_v2/          128×6, 1 s, 49 frames, 90.88%  ← current
+    ├── skip_frame_v2/        64×4, 1 s, 25 frames, 81.30%  ← current, QAT
+    ├── baseline/             128×6, 2 s, 99 frames, 91.56%
     ├── taper64_128/          64→128 taper, 90.13%
     ├── sr8k/                 64×4, 8 kHz, 88.44%
     ├── skip_frame/           64×4, 50 frames, 87.69%
@@ -148,6 +165,7 @@ Each `runs/<name>/` folder is a self-contained bundle:
 | `kws_tf_int8.tflite` | int8 model the nRF5340 runs |
 | `kws_tf.json` | label order + feature_norm mean/std + MFCC params |
 | `confusion_matrix.png` | per-class recall heatmap |
+| `kws_tf.keras` / `kws_tf_savedmodel/` | float graph for QAT (v2 + original skip_frame) |
 
 Flash one run at a time: convert that folder’s `.tflite` to `model.h`, and regenerate `dsp_constants.h` from that `kws_tf.json` if the sample rate, frame count, or feature_norm differ (sr4k, sr8k, skip_frame).
 
@@ -159,16 +177,13 @@ python src/gen_dsp_constants.py --json runs/sr8k/kws_tf.json --out dsp_constants
 
 ## Reproduction
 
-All six jobs were trained on Anvil (Purdue RCAC) using an H100 GPU, `cis260440-ai` allocation. SLURM scripts are in `slurm/`. To retrain any variant:
+v2 jobs were trained on Anvil (Purdue RCAC) using an H100 GPU, `cis260440-ai` allocation, partition `ai`.
 
 ```bash
-# on Anvil, from ~/kws-nrf5340-dataset/
-sbatch slurm/train_baseline.slurm
-sbatch slurm/train_taper.slurm
-sbatch slurm/train_skip.slurm
-sbatch slurm/train_w64.slurm
-sbatch slurm/train_sr8k.slurm
-sbatch slurm/train_sr4k.slurm
+# on Anvil, from ~/kws-v2/
+python src/prepare_hf_v2.py          # login node, needs internet
+sbatch slurm/train_baseline.slurm    # -> runs/baseline_v2
+sbatch slurm/train_skip.slurm        # -> runs/skip_frame_v2
 ```
 
-Feature caches are saved per variant as `mfcc_cache_sr<SR>_stride<stride>ms.npz` in the project root. The 16 kHz / 20 ms cache can be shared across baseline, taper, and w64.
+Feature caches are `mfcc_cache_sr16000_clip1000_stride20ms.npz` (baseline) and `mfcc_cache_sr16000_clip1000_stride40ms.npz` (skip-frame). Do not reuse the old 2 s caches.
