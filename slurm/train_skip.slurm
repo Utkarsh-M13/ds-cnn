@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=kws_skip
-#SBATCH --account=cis220051
-#SBATCH --partition=gpu
+#SBATCH --job-name=kws_skip_v2
+#SBATCH --account=cis260440-ai
+#SBATCH --partition=ai
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
@@ -16,11 +16,10 @@
 module load conda
 source activate ~/envs/kws-nrf5340
 
-cd ~/kws-nrf5340-dataset
+cd ~/kws-v2
 
-# Skip-frame: stride 20ms → 40ms, so ~50 frames instead of 99
-# Cuts input size in half — shows how much temporal detail matters for accuracy
-# Needs a new cache (different stride) — will build mfcc_cache_sr16000_stride40ms.npz
+# skip_frame_v2: stride 20ms → 40ms on 1 s clips (~25 frames)
+# Needs its own cache: mfcc_cache_sr16000_clip1000_stride40ms.npz
 python src/train_tf.py \
   --arch dscnn \
   --width 64 \
@@ -28,7 +27,7 @@ python src/train_tf.py \
   --frame-stride-ms 40 \
   --epochs 80 \
   --mixup 0.2 \
-  --run-name skip_frame \
+  --run-name skip_frame_v2 \
   --rebuild-cache
 
 echo "[job] skip-frame done — exit $?"

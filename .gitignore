@@ -3,6 +3,9 @@ __pycache__/
 kws-code.zip
 *.tar.gz
 mfcc_cache.npz
+mfcc_cache_*.npz
+processed/
+processed_v2/
 
 # Version-agnostic weights bundle made by tools/export_weights.py (regenerate, do not commit)
 *.weights.npz
@@ -11,6 +14,13 @@ mfcc_cache.npz
 .DS_Store
 
 # Full Anvil dumps: keep only int8 + json + confusion matrix under runs/
+# Exception: skip-frame float checkpoints are needed for QAT.
 runs/**/kws_tf.keras
 runs/**/kws_tf_float.tflite
 runs/**/kws_tf_savedmodel/
+!runs/skip_frame/kws_tf.keras
+!runs/skip_frame/kws_tf_savedmodel/
+!runs/skip_frame_v2/kws_tf.keras
+!runs/skip_frame_v2/kws_tf_savedmodel/
+!runs/baseline_v2/kws_tf.keras
+!runs/baseline_v2/kws_tf_savedmodel/

@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=kws_baseline
-#SBATCH --account=cis220051        # your Anvil allocation (check: sacctmgr show user $USER withassoc format=account -p)
-#SBATCH --partition=gpu
+#SBATCH --job-name=kws_base_v2
+#SBATCH --account=cis260440-ai        # your Anvil allocation (check: sacctmgr show user $USER withassoc format=account -p)
+#SBATCH --partition=ai
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
@@ -16,16 +16,17 @@
 module load conda
 source activate ~/envs/kws-nrf5340
 
-cd ~/kws-nrf5340-dataset
+cd ~/kws-v2
 
-# OG / baseline: dscnn width=128 depth=6 at 16 kHz, 20 ms stride (99 frames)
-# Reuses mfcc_cache_sr16000_stride20ms.npz (renamed from mfcc_cache.npz before submitting)
+# baseline_v2: dscnn 128x6 on snowballlab/30-keywords-v2 (1 s -> 49 frames)
+# Prepare wavs on a login node first:  python src/prepare_hf_v2.py
 python src/train_tf.py \
   --arch dscnn \
   --width 128 \
   --depth 6 \
   --epochs 80 \
   --mixup 0.2 \
-  --run-name baseline
+  --run-name baseline_v2 \
+  --rebuild-cache
 
 echo "[job] baseline done — exit $?"
