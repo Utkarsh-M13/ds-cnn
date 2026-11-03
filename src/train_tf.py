@@ -919,9 +919,6 @@ def main() -> None:
                     help="Mixup alpha (0=off; try 0.2 to push accuracy).")
     ap.add_argument("--label-smoothing", type=float, default=0.0,
                     help="Softens hard labels (try 0.05).")
-    ap.add_argument("--tag", default=None,
-                    help="Optional suffix for root-level artifact names (legacy; "
-                         "run outputs go to runs/<run-name>/ regardless).")
     ap.add_argument("--qat", action="store_true",
                     help="After float training, fine-tune with Quantization-Aware "
                          "Training so the int8 model tolerates on-device (CMSIS-NN) "
@@ -938,6 +935,16 @@ def main() -> None:
                     help="Up-weight rarer/harder classes (best with --mixup 0).")
     ap.add_argument("--no-augment", action="store_true",
                     help="Disable SpecAugment (train on raw features only).")
+    # SpecAugment strength (defaults match the original hardcoded values, so these
+    # are no-ops unless set). Raise them to push harder augmentation.
+    ap.add_argument("--aug-shift", type=int, default=8,
+                    help="Max +/- frame time-shift in SpecAugment (default 8).")
+    ap.add_argument("--aug-time-mask", type=int, default=16,
+                    help="Max time-mask width in frames (default 16).")
+    ap.add_argument("--aug-freq-mask", type=int, default=3,
+                    help="Max freq-mask width in MFCC coeffs (default 3).")
+    ap.add_argument("--aug-noise-std", type=float, default=0.12,
+                    help="Std of additive feature noise in SpecAugment (default 0.12).")
     ap.add_argument("--noise-aug", action="store_true",
                     help="Bake real background noise into TRAIN clips (needs --rebuild-cache).")
     ap.add_argument("--noise-copies", type=int, default=1,
@@ -1064,7 +1071,9 @@ def main() -> None:
 
     # --- data pipelines (augment only the training set) ---
     augmenter = None if args.no_augment else make_augmenter(
-        p.num_frames, n_coeffs=p.num_mfcc)
+        p.num_frames, n_coeffs=p.num_mfcc,
+        max_shift=args.aug_shift, max_time_mask=args.aug_time_mask,
+        max_freq_mask=args.aug_freq_mask, noise_std=args.aug_noise_std)
     use_mixup = args.mixup > 0 and not args.smoke
     train_ds = make_dataset(
         Xtr, ytr, args.batch_size, training=True, seed=seed,
