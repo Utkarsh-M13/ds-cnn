@@ -963,6 +963,10 @@ def main() -> None:
     ap.add_argument("--frame-stride-ms", type=float, default=None,
                     help="Override MFCC frame stride in ms (default from config, ~20 ms). "
                          "Set to 40 ms to skip every other frame.")
+    ap.add_argument("--num-mfcc", type=int, default=None,
+                    help="Override number of DCT coefficients kept (default from config, 13). "
+                         "Raise toward num_filters (48) for richer spectral features "
+                         "(full DCT carries the same information as the log-mel bands).")
     ap.add_argument("--tag", default="",
                     help="Optional suffix for extra artifacts (curves / root keras).")
     ap.add_argument("--rebuild-cache", action="store_true")
@@ -991,7 +995,7 @@ def main() -> None:
     tf.random.set_seed(seed)
     np.random.seed(seed)
     p = MFCCParams(cfg, sample_rate=args.sample_rate,
-                   frame_stride_ms=args.frame_stride_ms)
+                   frame_stride_ms=args.frame_stride_ms, num_mfcc=args.num_mfcc)
     backend = backend_name(cfg)
     # Bind the frontend to this `p` so --frame-stride-ms / --sample-rate apply
     # for both tf.signal and CMSIS-DSP backends.
@@ -1018,7 +1022,7 @@ def main() -> None:
     stride_ms_str = f"{p.frame_stride_ms:.0f}"
     clip_ms = int(cfg["audio"]["clip_ms"])
     cache_path = PROJECT_ROOT / (
-        f"mfcc_cache_sr{p.sample_rate}_clip{clip_ms}_stride{stride_ms_str}ms.npz"
+        f"mfcc_cache_sr{p.sample_rate}_clip{clip_ms}_stride{stride_ms_str}ms_c{p.num_mfcc}.npz"
     )
     print(f"[dsp] MFCC backend: {backend}  cache={cache_path.name}  "
           f"clip={clip_ms}ms frames={p.num_frames}")
