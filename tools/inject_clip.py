@@ -4,10 +4,11 @@ through the on-device int8 pipeline, bypassing the (too quiet) microphone.
 
 Pair with the firmware `inject` console command (serial-pcm-inject branch). The
 clip can be recorded anywhere, e.g. in Audacity; this tool resamples it to
-16 kHz mono and normalizes it to the training loudness (-20 dBFS RMS) so it
-reaches the model at the level it was trained on. That normalization is fix A
-applied on the host, which is why injected clips do not suffer the quiet-mic
-problem.
+16 kHz mono and normalizes it to a loud reference level (-20 dBFS RMS), close to
+the level the training clips naturally sit at, so it reaches the model loud rather
+than at the mic's level. (Training itself does not loudness-normalize; the clips
+are just naturally loud.) That host-side normalization is fix A applied on the
+host, which is why injected clips do not suffer the quiet-mic problem.
 
 Usage:
     # real run against the board
@@ -28,8 +29,8 @@ from scipy.io import wavfile
 from scipy.signal import resample_poly
 
 SAMPLE_RATE = 16000
-CLIP_SAMPLES = SAMPLE_RATE * 2          # 32000, must match firmware RAW_SAMPLE_COUNT
-TARGET_DBFS = -20.0                       # training loudness
+CLIP_SAMPLES = SAMPLE_RATE * 1          # 16000, must match firmware RAW_SAMPLE_COUNT (v2, 1 s clips)
+TARGET_DBFS = -20.0                       # loud reference level (near the training clips' natural level)
 
 
 def load_and_prepare(path, target_dbfs, normalize=True):
@@ -84,6 +85,15 @@ def stream_to_device(pcm, port, baud, per_line, read_timeout):
         return None
 
     print(f"[host] entering inject mode on {port} @ {baud}")
+    # Halt continuous inference first: it steals CPU from the console thread and
+    # spams the serial line, which makes every per-line ack slow.
+    ser.write(b"\nstop\n")
+    time.sleep(0.4)
+    # If a previous run left the device mid-inject, a bare "inject" is read as data.
+    # Cancel first (harmless "unknown command" if not in inject mode), then start fresh.
+    ser.write(b"injectcancel\n")
+    time.sleep(0.4)
+    ser.reset_input_buffer()
     ser.write(b"inject\n")
     if not wait_for("READY", 10.0):
         ser.close()
@@ -138,7 +148,9 @@ def main():
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--dbfs", type=float, default=TARGET_DBFS, help="target loudness (default -20)")
     ap.add_argument("--no-normalize", action="store_true", help="skip loudness normalization")
-    ap.add_argument("--per-line", type=int, default=16, help="samples per serial line (keep small)")
+    ap.add_argument("--per-line", type=int, default=200,
+                    help="samples per serial line (firmware caps at 256 / "
+                         "CONSOLE_INPUT_MAX_LINE_LEN=2048; lower it if a line gets truncated)")
     ap.add_argument("--read-timeout", type=float, default=1.0)
     ap.add_argument("--out-pcm", help="save the prepared int16 clip to this .npy and exit if no --port")
     args = ap.parse_args()
