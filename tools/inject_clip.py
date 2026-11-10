@@ -20,6 +20,7 @@ Usage:
 Requires: numpy, scipy. Real (non dry-run) also needs pyserial.
 """
 import argparse
+import re
 import sys
 import time
 from pathlib import Path
@@ -66,9 +67,16 @@ def measured_dbfs(pcm):
     return 20.0 * np.log10(np.sqrt(np.mean(f ** 2)) + 1e-12)
 
 
+def _ack_count(ack):
+    """Pull the running sample count out of '[INJECT] ok N' or '[INJECT] FULL N'."""
+    m = re.search(r"(?:ok|FULL)\s+(\d+)", ack)
+    return int(m.group(1)) if m else None
+
+
 def stream_to_device(pcm, port, baud, per_line, read_timeout):
     import serial  # pyserial, imported lazily so dry runs need no install
     checksum = int(np.sum(pcm.astype(np.int64)))   # firmware sums as a long
+    capacity = len(pcm)
     ser = serial.Serial(port, baud, timeout=read_timeout)
     time.sleep(0.3)
     ser.reset_input_buffer()
@@ -84,60 +92,105 @@ def stream_to_device(pcm, port, baud, per_line, read_timeout):
                     return ln
         return None
 
-    print(f"[host] entering inject mode on {port} @ {baud}")
-    # Halt continuous inference first: it steals CPU from the console thread and
-    # spams the serial line, which makes every per-line ack slow.
-    ser.write(b"\nstop\n")
-    time.sleep(0.4)
-    # If a previous run left the device mid-inject, a bare "inject" is read as data.
-    # Cancel first (harmless "unknown command" if not in inject mode), then start fresh.
-    ser.write(b"injectcancel\n")
-    time.sleep(0.4)
-    ser.reset_input_buffer()
-    ser.write(b"inject\n")
-    if not wait_for("READY", 10.0):
+    def cancel():
+        # Always leave the device OUT of inject mode. A run that never fills the
+        # buffer leaves the firmware treating the next typed line as PCM data
+        # (the stuck-inject bug), so we injectcancel on every exit path.
+        try:
+            ser.write(b"\ninjectcancel\n")
+            time.sleep(0.3)
+            ser.reset_input_buffer()
+        except Exception:
+            pass
+
+    # The device drops characters when a line arrives faster than it can take them
+    # in (UART RX overrun while the console thread is busy), so a long line loses
+    # most of its samples. We verify the device's running count after every line;
+    # if it falls behind what we sent, we abort and retry the whole clip at a
+    # smaller per_line. A mismatch is caught on the first bad line, so a failed
+    # attempt costs ~1 line, not a full upload. Reliability over speed: a parity
+    # clip can be slow. (Once the firmware pauses inference during inject, large
+    # per_line values work and this falls through on the first try.)
+    candidates = sorted({per_line, 64, 32, 16}, reverse=True)
+    candidates = [c for c in candidates if c <= per_line] or [per_line]
+
+    try:
+        for pl in candidates:
+            print(f"[host] inject attempt at {pl} samples/line ...")
+            ser.write(b"\nstop\n")          # halt inference so the console isn't starved
+            time.sleep(0.4)
+            ser.write(b"injectcancel\n")    # clear any stuck inject mode, then start fresh
+            time.sleep(0.4)
+            ser.reset_input_buffer()
+            ser.write(b"inject\n")
+            if not wait_for("READY", 10.0):
+                cancel()
+                sys.exit("[host] device did not acknowledge 'inject' (no READY). Is the v2 firmware flashed?")
+
+            t0 = time.time()
+            expected = 0
+            full_line = None
+            dropped = False
+            for i in range(0, capacity, pl):
+                chunk = pcm[i:i + pl]
+                expected = min(expected + len(chunk), capacity)
+                ser.write((",".join(str(int(v)) for v in chunk) + "\n").encode())
+                ack = wait_for("[INJECT]", 10.0)
+                if ack is None:
+                    print(f"[host] no ack after sample {i}; serial stalled.")
+                    dropped = True
+                    break
+                if "FULL" in ack:
+                    full_line = ack
+                    break
+                count = _ack_count(ack)
+                if count is None or count != expected:
+                    print(f"[host] device dropped samples (sent {expected}, device has {count}); "
+                          f"retrying at a smaller line size.")
+                    dropped = True
+                    break
+            dt = time.time() - t0
+
+            if dropped:
+                cancel()
+                continue  # retry smaller
+
+            if full_line is None:
+                full_line = wait_for("checksum=", 10.0)
+            if not (full_line and "checksum=" in full_line):
+                print("[host] never got the FULL/checksum line; retrying smaller.")
+                cancel()
+                continue
+
+            dev_sum = int(full_line.split("checksum=")[1].split()[0])
+            ok = (dev_sum == checksum)
+            print(f"[host] upload done in {dt:.1f}s ({pl}/line); "
+                  f"checksum host={checksum} device={dev_sum} -> {'MATCH' if ok else 'MISMATCH'}")
+            if not ok:
+                print("[host] checksum mismatch; retrying at a smaller line size.")
+                cancel()
+                continue
+
+            # success: the clip is loaded and the ML thread runs it. Collect OUT lines.
+            outs = []
+            end = time.time() + 30.0
+            while time.time() < end:
+                ln = ser.readline().decode(errors="replace").strip()
+                if not ln:
+                    continue
+                if ln.startswith("OUT,") and "ERROR" not in ln:
+                    parts = ln.split(",")
+                    outs.append((parts[1], float(parts[3])))
+                if "CAPTURE COMPLETE" in ln:
+                    break
+            return outs
+
+        sys.exit("[host] inject kept dropping data down to the smallest line size. "
+                 "The device is losing serial characters -- needs the firmware fix "
+                 "(pause inference during inject) flashed first.")
+    finally:
+        cancel()
         ser.close()
-        sys.exit("[host] device did not acknowledge 'inject' (no READY). Is the firmware flashed and inference not spamming? Try 'stop' first.")
-
-    print(f"[host] streaming {len(pcm)} samples, {per_line}/line ...")
-    t0 = time.time()
-    for i in range(0, len(pcm), per_line):
-        chunk = pcm[i:i + per_line]
-        line = ",".join(str(int(v)) for v in chunk) + "\n"
-        ser.write(line.encode())
-        # wait for the per-line ack so we never outrun the device's RX buffer
-        ack = wait_for("[INJECT]", 10.0)
-        if ack and "FULL" in ack:
-            break
-        if ack is None:
-            ser.close()
-            sys.exit(f"[host] no ack after sample {i}; aborting (serial stalled).")
-    dt = time.time() - t0
-    print(f"[host] upload done in {dt:.1f}s")
-
-    # device prints "[INJECT] FULL N samples checksum=X" then runs the clip
-    full = wait_for("checksum=", 10.0)
-    if full:
-        dev_sum = int(full.split("checksum=")[1].split()[0])
-        ok = (dev_sum == checksum)
-        print(f"[host] checksum host={checksum} device={dev_sum} -> {'MATCH' if ok else 'MISMATCH (data corrupted in transit)'}")
-        if not ok:
-            print("[host] WARNING: predictions below are not trustworthy.")
-
-    # collect OUT lines until capture completes
-    outs = []
-    end = time.time() + 30.0
-    while time.time() < end:
-        ln = ser.readline().decode(errors="replace").strip()
-        if not ln:
-            continue
-        if ln.startswith("OUT,") and "ERROR" not in ln:
-            parts = ln.split(",")
-            outs.append((parts[1], float(parts[3])))
-        if "CAPTURE COMPLETE" in ln:
-            break
-    ser.close()
-    return outs
 
 
 def main():
