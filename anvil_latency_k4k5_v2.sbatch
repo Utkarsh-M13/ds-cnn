@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=kws_latency_v2
-#SBATCH --account=cis260440-gpu
-#SBATCH --partition=gpu
+#SBATCH --account=cis260440-ai
+#SBATCH --partition=ai
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
@@ -29,9 +29,10 @@
 # and ~2 min (QAT). One task does both, so ~8 min max; 12 min leaves margin.
 # Check real usage:
 #   sacct -u $USER -S 2026-10-20 -X --format=JobID,JobName%28,Partition,Elapsed,Timelimit,State
-# Partition: the cis260440-gpu allocation only accepts the gpu partition. Slurm
-# rejects -p ai with it. The ai queue needs a separate AI allocation; list yours
-# with `mybalance`, then:  sbatch -A <ai-account> -p ai anvil_latency_k4k5_v2.sbatch
+# Queue: ai partition on the cis260440-ai allocation (shorter waits, per the
+# Nov 10 advice). Each account only accepts its own partition. Balances: `mybalance`.
+# Fallback to the gpu queue:
+#   sbatch -A cis260440-gpu -p gpu anvil_latency_k4k5_v2.sbatch
 #
 # Smoke test first (1 epoch on a tiny subset, no export, both tasks). It also
 # builds the MFCC caches (~2 min for c48), so the full run reuses them:
