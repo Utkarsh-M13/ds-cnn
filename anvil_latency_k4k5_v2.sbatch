@@ -5,7 +5,7 @@
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=00:20:00
+#SBATCH --time=00:12:00
 #SBATCH --array=0-1
 #SBATCH --output=latency_v2_%A_%a.log
 
@@ -25,13 +25,16 @@
 #   K5 vs baseline: only the network size differs (128x6 -> 64x4)
 #   K4 vs K5      : coefficients + stride at the same small network
 #
-# Wall time: 20 min per task is a first guess. Check what past jobs really used
-# and lower it:  sacct -u $USER -S 2026-10-20 -X --format=JobID,JobName%28,Partition,Elapsed,Timelimit,State
+# Wall time: past v2 jobs used 3.5 min (c48 float), 5.5 min with a cache build,
+# and ~2 min (QAT). One task does both, so ~8 min max; 12 min leaves margin.
+# Check real usage:
+#   sacct -u $USER -S 2026-10-20 -X --format=JobID,JobName%28,Partition,Elapsed,Timelimit,State
 # Partition: "ai" per the Nov 10 advice. To use the gpu queue instead:
 #   sbatch -p gpu anvil_latency_k4k5_v2.sbatch
 #
-# Smoke test first (1 epoch on a tiny subset, no export, both tasks):
-#   sbatch --export=ALL,SMOKE=1 --time=00:05:00 anvil_latency_k4k5_v2.sbatch
+# Smoke test first (1 epoch on a tiny subset, no export, both tasks). It also
+# builds the MFCC caches (~2 min for c48), so the full run reuses them:
+#   sbatch --export=ALL,SMOKE=1 --time=00:06:00 anvil_latency_k4k5_v2.sbatch
 #
 # PREREQUISITE: processed/ holds the v2 wavs (bash jobs/prepare_hf_v2.sh on login).
 
