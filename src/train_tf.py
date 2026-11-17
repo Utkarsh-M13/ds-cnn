@@ -471,7 +471,12 @@ def build_dscnn(input_shape: tuple[int, int, int], n_classes: int,
         x = L.Conv2D(ch, 1, use_bias=False)(x)
         x = L.BatchNormalization(momentum=0.9)(x)
         x = L.ReLU()(x)
-    x = L.GlobalAveragePooling2D()(x)
+    # Global average pool written as a full-grid AveragePooling2D + Flatten.
+    # Same math and weights as GlobalAveragePooling2D, but it exports to TFLite
+    # AVERAGE_POOL_2D (CMSIS-NN optimized) instead of MEAN (generic kernel).
+    # Measured on the nRF5340: MEAN took 29.5 ms (baseline) and 126 ms (c48).
+    x = L.AveragePooling2D(pool_size=(int(x.shape[1]), int(x.shape[2])))(x)
+    x = L.Flatten()(x)
     x = L.Dropout(dropout)(x)
     out = L.Dense(n_classes, activation="softmax", name="scores")(x)
     model_name = "kws_dscnn_taper" if (width_end and width_end != width) else "kws_dscnn"
