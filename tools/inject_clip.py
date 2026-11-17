@@ -1,5 +1,5 @@
 """
-Stream a 2 s audio clip into the Thingy:53 over the serial console and run it
+Stream a 1 s audio clip into the Thingy:53 over the serial console and run it
 through the on-device int8 pipeline, bypassing the (too quiet) microphone.
 
 Pair with the firmware `inject` console command (serial-pcm-inject branch). The
@@ -35,7 +35,7 @@ TARGET_DBFS = -20.0                       # loud reference level (near the train
 
 
 def load_and_prepare(path, target_dbfs, normalize=True):
-    """wav (any rate/channels) -> (32000,) int16 at 16 kHz, normalized to target."""
+    """wav (any rate/channels) -> (16000,) int16 at 16 kHz, normalized to target."""
     sr, x = wavfile.read(path)
     x = x.astype(np.float64)
     if x.ndim > 1:                        # stereo -> mono
@@ -53,7 +53,7 @@ def load_and_prepare(path, target_dbfs, normalize=True):
         cur_dbfs = 20.0 * np.log10(rms)
         gain = 10.0 ** ((target_dbfs - cur_dbfs) / 20.0)
         x = x * gain
-    # pad / trim to exactly 2 s
+    # pad / trim to exactly 1 s
     if len(x) < CLIP_SAMPLES:
         x = np.concatenate([x, np.zeros(CLIP_SAMPLES - len(x))])
     else:
@@ -71,6 +71,28 @@ def _ack_count(ack):
     """Pull the running sample count out of '[INJECT] ok N' or '[INJECT] FULL N'."""
     m = re.search(r"(?:ok|FULL)\s+(\d+)", ack)
     return int(m.group(1)) if m else None
+
+
+# Zephyr's uart_console keeps its line cursor in a uint8_t: a line longer than 255
+# chars wraps and overwrites its own start, silently losing samples, regardless of
+# CONFIG_CONSOLE_INPUT_MAX_LINE_LEN. Keep every line safely under that.
+MAX_LINE_CHARS = 250
+
+
+def pack_lines(pcm, per_line, max_chars=MAX_LINE_CHARS):
+    """Split samples into comma-separated lines of <= max_chars and <= per_line samples."""
+    lines, cur, cur_len = [], [], 0
+    for v in pcm:
+        s = str(int(v))
+        add = len(s) + (1 if cur else 0)
+        if cur and (cur_len + add > max_chars or len(cur) >= per_line):
+            lines.append(cur)
+            cur, cur_len, add = [], 0, len(s)
+        cur.append(s)
+        cur_len += add
+    if cur:
+        lines.append(cur)
+    return lines
 
 
 def stream_to_device(pcm, port, baud, per_line, read_timeout):
@@ -103,20 +125,15 @@ def stream_to_device(pcm, port, baud, per_line, read_timeout):
         except Exception:
             pass
 
-    # The device drops characters when a line arrives faster than it can take them
-    # in (UART RX overrun while the console thread is busy), so a long line loses
-    # most of its samples. We verify the device's running count after every line;
-    # if it falls behind what we sent, we abort and retry the whole clip at a
-    # smaller per_line. A mismatch is caught on the first bad line, so a failed
-    # attempt costs ~1 line, not a full upload. Reliability over speed: a parity
-    # clip can be slow. (Once the firmware pauses inference during inject, large
-    # per_line values work and this falls through on the first try.)
-    candidates = sorted({per_line, 64, 32, 16}, reverse=True)
-    candidates = [c for c in candidates if c <= per_line] or [per_line]
+    # Lines are packed to <= MAX_LINE_CHARS (see pack_lines). We still verify the
+    # device's running count after every line, and retry the whole clip once if a
+    # line is lost, so a bad upload is caught on the first wrong line.
+    lines = pack_lines(pcm, per_line)
 
     try:
-        for pl in candidates:
-            print(f"[host] inject attempt at {pl} samples/line ...")
+        for attempt in (1, 2):
+            print(f"[host] inject attempt {attempt}: {len(lines)} lines "
+                  f"(<= {MAX_LINE_CHARS} chars each) ...")
             ser.write(b"\nstop\n")          # halt inference so the console isn't starved
             time.sleep(0.4)
             ser.write(b"injectcancel\n")    # clear any stuck inject mode, then start fresh
@@ -131,13 +148,12 @@ def stream_to_device(pcm, port, baud, per_line, read_timeout):
             expected = 0
             full_line = None
             dropped = False
-            for i in range(0, capacity, pl):
-                chunk = pcm[i:i + pl]
+            for chunk in lines:
                 expected = min(expected + len(chunk), capacity)
-                ser.write((",".join(str(int(v)) for v in chunk) + "\n").encode())
+                ser.write((",".join(chunk) + "\n").encode())
                 ack = wait_for("[INJECT]", 10.0)
                 if ack is None:
-                    print(f"[host] no ack after sample {i}; serial stalled.")
+                    print(f"[host] no ack after sample {expected}; serial stalled.")
                     dropped = True
                     break
                 if "FULL" in ack:
@@ -145,29 +161,28 @@ def stream_to_device(pcm, port, baud, per_line, read_timeout):
                     break
                 count = _ack_count(ack)
                 if count is None or count != expected:
-                    print(f"[host] device dropped samples (sent {expected}, device has {count}); "
-                          f"retrying at a smaller line size.")
+                    print(f"[host] device dropped samples (sent {expected}, device has {count}).")
                     dropped = True
                     break
             dt = time.time() - t0
 
             if dropped:
                 cancel()
-                continue  # retry smaller
+                continue  # retry once
 
             if full_line is None:
                 full_line = wait_for("checksum=", 10.0)
             if not (full_line and "checksum=" in full_line):
-                print("[host] never got the FULL/checksum line; retrying smaller.")
+                print("[host] never got the FULL/checksum line.")
                 cancel()
                 continue
 
             dev_sum = int(full_line.split("checksum=")[1].split()[0])
             ok = (dev_sum == checksum)
-            print(f"[host] upload done in {dt:.1f}s ({pl}/line); "
+            print(f"[host] upload done in {dt:.1f}s ({len(lines)} lines); "
                   f"checksum host={checksum} device={dev_sum} -> {'MATCH' if ok else 'MISMATCH'}")
             if not ok:
-                print("[host] checksum mismatch; retrying at a smaller line size.")
+                print("[host] checksum mismatch.")
                 cancel()
                 continue
 
@@ -185,9 +200,8 @@ def stream_to_device(pcm, port, baud, per_line, read_timeout):
                     break
             return outs
 
-        sys.exit("[host] inject kept dropping data down to the smallest line size. "
-                 "The device is losing serial characters -- needs the firmware fix "
-                 "(pause inference during inject) flashed first.")
+        sys.exit("[host] inject failed twice. The device is losing serial data; "
+                 "check that the kws-v2 firmware with the inject fixes is flashed.")
     finally:
         cancel()
         ser.close()
@@ -202,8 +216,8 @@ def main():
     ap.add_argument("--dbfs", type=float, default=TARGET_DBFS, help="target loudness (default -20)")
     ap.add_argument("--no-normalize", action="store_true", help="skip loudness normalization")
     ap.add_argument("--per-line", type=int, default=200,
-                    help="samples per serial line (firmware caps at 256 / "
-                         "CONSOLE_INPUT_MAX_LINE_LEN=2048; lower it if a line gets truncated)")
+                    help="max samples per serial line; each line is also capped at "
+                         f"{MAX_LINE_CHARS} chars (the device console wraps past 255)")
     ap.add_argument("--read-timeout", type=float, default=1.0)
     ap.add_argument("--out-pcm", help="save the prepared int16 clip to this .npy and exit if no --port")
     args = ap.parse_args()
