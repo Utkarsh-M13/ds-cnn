@@ -36,6 +36,6 @@ env -u TF_USE_LEGACY_KERAS python tools/export_weights.py runs/baseline_v2/kws_t
 
 # --init loads the float weights, --epochs 0 skips float retrain, QAT fine-tunes,
 # exports int8. Default stride (20 ms -> 49 frames). --rebuild-cache builds the v2
-# baseline MFCC cache (mfcc_cache_sr16000_clip1000_stride20ms.npz).
+# baseline MFCC cache (mfcc_cache_sr16000_clip1000_stride20ms_c13.npz).
 python src/train_tf.py --init runs/baseline_v2/kws_tf.keras --epochs 0 \
   --qat --run-name baseline_qat_v2 --rebuild-cache

@@ -36,6 +36,6 @@ env -u TF_USE_LEGACY_KERAS python tools/export_weights.py runs/skip_frame_v2/kws
 
 # --init loads the float weights, --epochs 0 skips any float retrain, QAT fine-tunes,
 # exports the int8 tflite. --frame-stride-ms 40 is the skip-frame stride (25 frames
-# at 1 s). --rebuild-cache builds the v2 MFCC cache (mfcc_cache_sr16000_clip1000_stride40ms.npz).
+# at 1 s). --rebuild-cache builds the v2 MFCC cache (mfcc_cache_sr16000_clip1000_stride40ms_c13.npz).
 python src/train_tf.py --init runs/skip_frame_v2/kws_tf.keras --epochs 0 \
   --frame-stride-ms 40 --qat --run-name skip_frame_qat_v2 --rebuild-cache
