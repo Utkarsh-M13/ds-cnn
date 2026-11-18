@@ -223,4 +223,4 @@ python src/train_tf.py --init runs/skip_frame_v2/kws_tf.keras --epochs 0 \
   --frame-stride-ms 40 --qat --run-name skip_frame_qat_v2
 ```
 
-`--epochs 0` skips float training, and `--qat` adds the QAT fine-tune (`--qat-epochs`, default 5). The ready-made jobs are `anvil_qat_baseline_v2.sbatch`, `anvil_qat_skip_v2.sbatch`, and `anvil_train_baseline_c48_v2.sbatch`.
+`--epochs 0` skips float training, and `--qat` adds the QAT fine-tune (`--qat-epochs`, default 5). The ready-made QAT jobs are `anvil_qat_baseline_v2.sbatch`, `anvil_qat_skip_v2.sbatch`, and `anvil_qat_c48_v2.sbatch`. c48 has no float checkpoint in `runs/`, so train it first with `anvil_train_baseline_c48_v2.sbatch` (writes `runs/baseline_c48_v2/`).
