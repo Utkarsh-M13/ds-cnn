@@ -13,7 +13,7 @@ it with make_oracle_clips.py.
 
 Usage:
     python tools/pick_heldout_clips.py --out heldout_clips \
-        --words set_a_timer volume_down yes search five --per-word 1
+        --words yes search five --per-word 1
 """
 from __future__ import annotations
 

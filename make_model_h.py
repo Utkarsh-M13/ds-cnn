@@ -9,7 +9,7 @@ so this script always emits those names, regardless of the input filename. Drop 
 the firmware's src/model.h, rebuild, and flash.
 
 Usage:
-    python make_model_h.py kws_tf_qat_int8.tflite -o model.h
+    python make_model_h.py runs/skip_frame_qat_v2/kws_tf_int8.tflite -o model.h
     # then: cp model.h <thingy53-tflm>/src/model.h  &&  west build ... --pristine
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ SYMBOL = "kws_tf_int8_tflite"   # must match the name used in the firmware's MLI
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("tflite", help="path to the int8 .tflite (e.g. kws_tf_qat_int8.tflite)")
+    ap.add_argument("tflite", help="path to the int8 .tflite (e.g. runs/skip_frame_qat_v2/kws_tf_int8.tflite)")
     ap.add_argument("-o", "--out", default="model.h", help="output header (default model.h)")
     ap.add_argument("--per-line", type=int, default=12, help="bytes per line (default 12)")
     args = ap.parse_args()

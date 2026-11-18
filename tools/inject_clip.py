@@ -1,14 +1,14 @@
 """
 Stream a 1 s audio clip into the Thingy:53 over the serial console and run it
-through the on-device int8 pipeline, bypassing the (too quiet) microphone.
+through the on-device int8 pipeline, bypassing the microphone (its level is far below the training clips).
 
-Pair with the firmware `inject` console command (serial-pcm-inject branch). The
+Pair with the firmware `inject` console command. The
 clip can be recorded anywhere, e.g. in Audacity; this tool resamples it to
 16 kHz mono and normalizes it to a loud reference level (-20 dBFS RMS), close to
 the level the training clips naturally sit at, so it reaches the model loud rather
 than at the mic's level. (Training itself does not loudness-normalize; the clips
-are just naturally loud.) That host-side normalization is fix A applied on the
-host, which is why injected clips do not suffer the quiet-mic problem.
+are just naturally loud.) Because the level is fixed on the host, injected clips avoid the quiet-mic
+problem.
 
 Usage:
     # real run against the board

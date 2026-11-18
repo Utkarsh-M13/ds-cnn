@@ -18,7 +18,7 @@ export TF_USE_LEGACY_KERAS=1   # tensorflow-model-optimization (QAT) needs Keras
 
 cd "$SLURM_SUBMIT_DIR"
 
-# QAT of Bisti's new baseline model trained on the v2 dataset
+# QAT of the v2 baseline model trained on the v2 dataset
 # (runs/baseline_v2/kws_tf.keras): width 128, depth 6, 1 s clips / 49 frames.
 # This is the high-accuracy model (90.88%, ~142 KB int8); the skip-frame job is
 # the deployment candidate. Uses the DEFAULT 20 ms stride (no --frame-stride-ms),
@@ -28,13 +28,13 @@ cd "$SLURM_SUBMIT_DIR"
 # node (GPU nodes have no internet) before submitting:
 #     bash jobs/prepare_hf_v2.sh        # writes processed/<label>/{train,val,test}_*.wav
 #
-# Her checkpoint is Keras 3; QAT runs under Keras 2. Make a version-agnostic
+# The v2 checkpoint is Keras 3; QAT runs under Keras 2. Make a version-agnostic
 # weights bundle under Keras 3 first; load_checkpoint uses it when the direct
 # Keras 2 load fails. (Verified locally: rebuilt model matches with 0 pred diff.)
 env -u TF_USE_LEGACY_KERAS python tools/export_weights.py runs/baseline_v2/kws_tf.keras \
   || echo "[warn] export_weights skipped; will try a direct load under Keras 2"
 
-# --init loads her float weights, --epochs 0 skips float retrain, QAT fine-tunes,
+# --init loads the float weights, --epochs 0 skips float retrain, QAT fine-tunes,
 # exports int8. Default stride (20 ms -> 49 frames). --rebuild-cache builds the v2
 # baseline MFCC cache (mfcc_cache_sr16000_clip1000_stride20ms.npz).
 python src/train_tf.py --init runs/baseline_v2/kws_tf.keras --epochs 0 \

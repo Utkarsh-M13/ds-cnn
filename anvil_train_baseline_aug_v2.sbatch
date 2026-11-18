@@ -19,7 +19,7 @@ cd "$SLURM_SUBMIT_DIR"
 
 # Experiment: does stronger augmentation push baseline accuracy past 90.88%?
 # Trains the baseline arch (width 128, depth 6) FROM SCRATCH on the v2 data, with
-# the same recipe Bisti used EXCEPT augmentation is turned up. This is a clean A/B
+# the same recipe as baseline_v2 EXCEPT augmentation is turned up. This is a clean A/B
 # vs runs/baseline_v2 (same data, same arch, only augmentation changed).
 #
 # Augmentation turned up from the defaults:

@@ -17,8 +17,7 @@ conda activate "$HOME/qatenv"
 
 cd "$SLURM_SUBMIT_DIR"
 
-# Experiment: do richer spectral features help? ("log-mel" lever from the
-# path-to-95 notes.) Trains the baseline arch (width 128, depth 6) FROM SCRATCH on
+# Experiment: do richer spectral features help? Trains the baseline arch (width 128, depth 6) FROM SCRATCH on
 # the v2 data with the SAME recipe as runs/baseline_v2, changing only the feature
 # width: keep all 48 DCT coefficients instead of 13 (--num-mfcc 48).
 #
