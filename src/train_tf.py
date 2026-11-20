@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -909,6 +910,15 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--batch-size", type=int, default=128)
     ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--lr-schedule", choices=("plateau", "cosine"), default="plateau",
+                    help="plateau = halve LR when val accuracy stalls, with early stopping "
+                         "(default). cosine = linear warmup, then cosine decay to ~0 over "
+                         "all epochs, no early stopping.")
+    ap.add_argument("--warmup-epochs", type=int, default=0,
+                    help="Linear LR warmup epochs (cosine schedule only).")
+    ap.add_argument("--weight-decay", type=float, default=0.0,
+                    help="Decoupled weight decay. > 0 switches the float optimizer "
+                         "from Adam to AdamW.")
     ap.add_argument("--arch", choices=("dscnn", "cnn"), default="dscnn",
                     help="dscnn = MCU-friendly (default); cnn = plain Conv2D.")
     ap.add_argument("--width", type=int, default=64,
@@ -1026,8 +1036,12 @@ def main() -> None:
     # Include clip_ms so a 1 s v2 cache cannot silently reuse a 2 s cache.
     stride_ms_str = f"{p.frame_stride_ms:.0f}"
     clip_ms = int(cfg["audio"]["clip_ms"])
+    # Noisy caches get their own name so clean runs never load noise-mixed features.
+    noise_str = (f"_noise{args.noise_copies}x{args.snr_min:g}-{args.snr_max:g}dB"
+                 if args.noise_aug else "")
     cache_path = PROJECT_ROOT / (
-        f"mfcc_cache_sr{p.sample_rate}_clip{clip_ms}_stride{stride_ms_str}ms_c{p.num_mfcc}.npz"
+        f"mfcc_cache_sr{p.sample_rate}_clip{clip_ms}_stride{stride_ms_str}ms_c{p.num_mfcc}"
+        f"{noise_str}.npz"
     )
     print(f"[dsp] MFCC backend: {backend}  cache={cache_path.name}  "
           f"clip={clip_ms}ms frames={p.num_frames}")
@@ -1158,8 +1172,12 @@ def main() -> None:
             )
         Xte_eval, yte_eval = Xte, yte
 
+    if args.weight_decay > 0:
+        optimizer = tf.keras.optimizers.AdamW(args.lr, weight_decay=args.weight_decay)
+    else:
+        optimizer = tf.keras.optimizers.Adam(args.lr)
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(args.lr),
+        optimizer=optimizer,
         loss=loss,
         metrics=["accuracy"],
     )
@@ -1168,7 +1186,8 @@ def main() -> None:
     print(f"[train] arch={args.arch} width={args.width}{taper_str} depth={args.depth} "
           f"sr={p.sample_rate} stride={p.frame_stride_ms}ms frames={p.num_frames} "
           f"mixup={args.mixup} label_smoothing={args.label_smoothing} "
-          f"init={args.init}")
+          f"lr={args.lr} schedule={args.lr_schedule} warmup={args.warmup_epochs} "
+          f"weight_decay={args.weight_decay} init={args.init}")
 
     # Output naming: --tag keeps extra artifacts side by side; keras lives in run_dir.
     base = f"kws_tf_{args.tag}" if args.tag else "kws_tf"
@@ -1176,11 +1195,23 @@ def main() -> None:
     callbacks = [
         tf.keras.callbacks.ModelCheckpoint(
             str(ckpt), monitor="val_accuracy", save_best_only=True),
-        tf.keras.callbacks.ReduceLROnPlateau(
-            monitor="val_accuracy", factor=0.5, patience=4, min_lr=1e-6),
-        tf.keras.callbacks.EarlyStopping(
-            monitor="val_accuracy", patience=16, restore_best_weights=True),
     ]
+    if args.lr_schedule == "cosine":
+        def cosine_lr(epoch, _lr):
+            if epoch < args.warmup_epochs:
+                return args.lr * (epoch + 1) / args.warmup_epochs
+            span = max(1, args.epochs - args.warmup_epochs)
+            t = (epoch - args.warmup_epochs) / span
+            return args.lr * 0.5 * (1.0 + math.cos(math.pi * t))
+        callbacks.append(tf.keras.callbacks.LearningRateScheduler(cosine_lr))
+        # Run every epoch; still restore the best val epoch at the end.
+        stop_patience = args.epochs
+    else:
+        callbacks.append(tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_accuracy", factor=0.5, patience=4, min_lr=1e-6))
+        stop_patience = 16
+    callbacks.append(tf.keras.callbacks.EarlyStopping(
+        monitor="val_accuracy", patience=stop_patience, restore_best_weights=True))
 
     # Skip float training when --epochs 0 (e.g. QAT-only on a loaded checkpoint).
     if args.epochs > 0:
@@ -1272,6 +1303,8 @@ def main() -> None:
             "width_taper": args.width_taper,
             "epochs": args.epochs, "mixup": args.mixup,
             "label_smoothing": args.label_smoothing,
+            "lr": args.lr, "lr_schedule": args.lr_schedule,
+            "warmup_epochs": args.warmup_epochs, "weight_decay": args.weight_decay,
         },
         "int8_tflite": int8_path.name,
         "saved_model_dir": sm_dir.name,
