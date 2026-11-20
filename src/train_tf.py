@@ -919,6 +919,10 @@ def main() -> None:
     ap.add_argument("--weight-decay", type=float, default=0.0,
                     help="Decoupled weight decay. > 0 switches the float optimizer "
                          "from Adam to AdamW.")
+    ap.add_argument("--train-seed", type=int, default=None,
+                    help="Seed for weight init, augmentation and shuffling. The data "
+                         "split keeps the config seed, so test sets stay identical. "
+                         "Default: the config seed.")
     ap.add_argument("--arch", choices=("dscnn", "cnn"), default="dscnn",
                     help="dscnn = MCU-friendly (default); cnn = plain Conv2D.")
     ap.add_argument("--width", type=int, default=64,
@@ -1006,9 +1010,11 @@ def main() -> None:
         # feature frame count mismatches p.num_frames.
         cfg["mfcc_reference"]["frame_stride_ms"] = float(args.frame_stride_ms)
         print(f"[mfcc] frame_stride_ms overridden -> {args.frame_stride_ms} ms")
-    seed = cfg["sampling"]["seed"]
-    tf.random.set_seed(seed)
-    np.random.seed(seed)
+    seed = cfg["sampling"]["seed"]          # data split, caches, noise mixing
+    train_seed = seed if args.train_seed is None else args.train_seed
+    # Seeds Python, NumPy, TF and the Keras 3 initializer generator together
+    # (tf.random.set_seed alone does not fix Keras 3 weight init).
+    tf.keras.utils.set_random_seed(train_seed)  # weight init, augmentation, shuffle
     p = MFCCParams(cfg, sample_rate=args.sample_rate,
                    frame_stride_ms=args.frame_stride_ms, num_mfcc=args.num_mfcc)
     backend = backend_name(cfg)
@@ -1099,7 +1105,7 @@ def main() -> None:
         max_freq_mask=args.aug_freq_mask, noise_std=args.aug_noise_std)
     use_mixup = args.mixup > 0 and not args.smoke
     train_ds = make_dataset(
-        Xtr, ytr, args.batch_size, training=True, seed=seed,
+        Xtr, ytr, args.batch_size, training=True, seed=train_seed,
         augmenter=augmenter, mixup_alpha=args.mixup if use_mixup else 0.0,
         n_classes=len(labels),
     )
@@ -1187,7 +1193,7 @@ def main() -> None:
           f"sr={p.sample_rate} stride={p.frame_stride_ms}ms frames={p.num_frames} "
           f"mixup={args.mixup} label_smoothing={args.label_smoothing} "
           f"lr={args.lr} schedule={args.lr_schedule} warmup={args.warmup_epochs} "
-          f"weight_decay={args.weight_decay} init={args.init}")
+          f"weight_decay={args.weight_decay} train_seed={train_seed} init={args.init}")
 
     # Output naming: --tag keeps extra artifacts side by side; keras lives in run_dir.
     base = f"kws_tf_{args.tag}" if args.tag else "kws_tf"
@@ -1305,6 +1311,7 @@ def main() -> None:
             "label_smoothing": args.label_smoothing,
             "lr": args.lr, "lr_schedule": args.lr_schedule,
             "warmup_epochs": args.warmup_epochs, "weight_decay": args.weight_decay,
+            "train_seed": train_seed,
         },
         "int8_tflite": int8_path.name,
         "saved_model_dir": sm_dir.name,
