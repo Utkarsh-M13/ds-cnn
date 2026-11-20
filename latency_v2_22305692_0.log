@@ -1,0 +1,872 @@
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) gmp/6.2.1     3) numactl/2.0.14     5) zlib/1.2.11
+  2) mpc/1.1.0     4) openmpi/4.0.6
+
+The following have been reloaded with a version change:
+  1) gcc/11.2.0 => gcc/8.4.1        3) mpfr/4.0.2 => mpfr/3.1.6
+  2) modtree/cpu => modtree/gpu
+
+[job] task=0 run=latency_k4_c48_skip_w64d4 feat=--num-mfcc 48 --frame-stride-ms 40
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1795135122.187137 1509834 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1795135122.569584 1509834 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX512_FP16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1795135124.218489 1509834 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1795135127.148470 1509834 gpu_device.cc:2043] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 78795 MB memory:  -> device: 0, name: NVIDIA H100 80GB HBM3, pci bus id: 0000:dc:00.0, compute capability: 9.0a
+[mfcc] frame_stride_ms overridden -> 40.0 ms
+[run] name=latency_k4_c48_skip_w64d4  out_dir=/home/x-umajithia/ds-cnn/runs/latency_k4_c48_skip_w64d4
+[dsp] MFCC backend: arm_f32  cache=mfcc_cache_sr16000_clip1000_stride40ms_c48.npz  clip=1000ms frames=25
+[data] 30 classes: answer, back, call, close, down, eight, five, four, go, help, left, next, nine, no, one, open, play, previous, record, right, search, seven, six, start, stop, three, two, up, yes, zero
+[cache] loaded mfcc_cache_sr16000_clip1000_stride40ms_c48.npz  X=(30000, 25, 48)  dsp=arm_f32
+[data] train=20400 val=3600 test=6000 feat_shape=(25, 48, 1)
+[model] params=25,502  est_int8≈30 KB  (nRF5340 budget ≈234 KB)
+
+  ┌─ Model Complexity Report ──────────────────────────────────┐
+  │  Parameters   :       25,502                              │
+  │  MACs (manual  ):    6,631,296                              │
+  │  int8 size    :       30 KB  (weights + flatbuffer overhead)    │
+  │  nRF5340 est. :    174.5 ms  MAC-based estimate (manual, 38M MACs/s│
+  │  Input shape  :  (25, 48, 1)                              │
+  └────────────────────────────────────────────────────────────┘
+  pip install keras-flops  for better MAC counting
+Model: "kws_dscnn"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
+┃ Layer (type)                    ┃ Output Shape           ┃       Param # ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
+│ mfcc (InputLayer)               │ (None, 25, 48, 1)      │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ conv2d (Conv2D)                 │ (None, 13, 24, 64)     │         2,560 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization             │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu (ReLU)                    │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ depthwise_conv2d                │ (None, 13, 24, 64)     │           576 │
+│ (DepthwiseConv2D)               │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_1           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_1 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ conv2d_1 (Conv2D)               │ (None, 13, 24, 64)     │         4,096 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_2           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_2 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ depthwise_conv2d_1              │ (None, 13, 24, 64)     │           576 │
+│ (DepthwiseConv2D)               │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_3           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_3 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ conv2d_2 (Conv2D)               │ (None, 13, 24, 64)     │         4,096 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_4           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_4 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ depthwise_conv2d_2              │ (None, 13, 24, 64)     │           576 │
+│ (DepthwiseConv2D)               │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_5           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_5 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ conv2d_3 (Conv2D)               │ (None, 13, 24, 64)     │         4,096 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_6           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_6 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ depthwise_conv2d_3              │ (None, 13, 24, 64)     │           576 │
+│ (DepthwiseConv2D)               │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_7           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_7 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ conv2d_4 (Conv2D)               │ (None, 13, 24, 64)     │         4,096 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ batch_normalization_8           │ (None, 13, 24, 64)     │           256 │
+│ (BatchNormalization)            │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ re_lu_8 (ReLU)                  │ (None, 13, 24, 64)     │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ average_pooling2d               │ (None, 1, 1, 64)       │             0 │
+│ (AveragePooling2D)              │                        │               │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ flatten (Flatten)               │ (None, 64)             │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ dropout (Dropout)               │ (None, 64)             │             0 │
+├─────────────────────────────────┼────────────────────────┼───────────────┤
+│ scores (Dense)                  │ (None, 30)             │         1,950 │
+└─────────────────────────────────┴────────────────────────┴───────────────┘
+ Total params: 25,502 (99.62 KB)
+ Trainable params: 24,350 (95.12 KB)
+ Non-trainable params: 1,152 (4.50 KB)
+/home/x-umajithia/qatenv/lib/python3.12/site-packages/keras/src/trainers/epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+[train] arch=dscnn width=64 depth=4 sr=16000 stride=40.0ms frames=25 mixup=0.2 label_smoothing=0.05 init=None
+Epoch 1/80
+I0000 00:00:1795135131.344997 1509868 service.cc:153] XLA service 0x149dfc041650 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1795135131.345096 1509868 service.cc:161]   StreamExecutor [0]: NVIDIA H100 80GB HBM3, Compute Capability 9.0a (Driver: 13.4.0; Runtime: 12.9.0; Toolkit: 12.5.0; DNN: 9.27.0)
+I0000 00:00:1795135131.422037 1509868 dump_mlir_util.cc:269] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+I0000 00:00:1795135131.856522 1509868 cuda_dnn.cc:461] Loaded cuDNN version 92700
+I0000 00:00:1795135131.920025 1509868 dot_merger.cc:481] Merging Dots in computation: a_inference_one_step_on_data_6433__.74
+I0000 00:00:1795135135.847384 1509868 device_compiler.h:208] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+I0000 00:00:1795135136.693110 1509872 dot_merger.cc:481] Merging Dots in computation: a_inference_one_step_on_data_6433__.74
+160/160 - 12s - 73ms/step - accuracy: 0.0583 - loss: 3.3456 - val_accuracy: 0.0942 - val_loss: 3.1087 - learning_rate: 0.0010
+Epoch 2/80
+160/160 - 1s - 3ms/step - accuracy: 0.1297 - loss: 3.0987 - val_accuracy: 0.2600 - val_loss: 2.5853 - learning_rate: 0.0010
+Epoch 3/80
+160/160 - 1s - 3ms/step - accuracy: 0.2162 - loss: 2.8572 - val_accuracy: 0.4144 - val_loss: 2.1924 - learning_rate: 0.0010
+Epoch 4/80
+160/160 - 1s - 3ms/step - accuracy: 0.2833 - loss: 2.6911 - val_accuracy: 0.5358 - val_loss: 1.8565 - learning_rate: 0.0010
+Epoch 5/80
+160/160 - 1s - 3ms/step - accuracy: 0.3352 - loss: 2.5808 - val_accuracy: 0.5906 - val_loss: 1.6821 - learning_rate: 0.0010
+Epoch 6/80
+160/160 - 1s - 3ms/step - accuracy: 0.3599 - loss: 2.4954 - val_accuracy: 0.6383 - val_loss: 1.5619 - learning_rate: 0.0010
+Epoch 7/80
+160/160 - 1s - 3ms/step - accuracy: 0.3825 - loss: 2.4357 - val_accuracy: 0.6628 - val_loss: 1.4689 - learning_rate: 0.0010
+Epoch 8/80
+160/160 - 1s - 3ms/step - accuracy: 0.4040 - loss: 2.3876 - val_accuracy: 0.6775 - val_loss: 1.3965 - learning_rate: 0.0010
+Epoch 9/80
+160/160 - 1s - 3ms/step - accuracy: 0.4145 - loss: 2.3571 - val_accuracy: 0.6967 - val_loss: 1.3231 - learning_rate: 0.0010
+Epoch 10/80
+160/160 - 1s - 3ms/step - accuracy: 0.4292 - loss: 2.3323 - val_accuracy: 0.7075 - val_loss: 1.2964 - learning_rate: 0.0010
+Epoch 11/80
+160/160 - 1s - 3ms/step - accuracy: 0.4346 - loss: 2.3155 - val_accuracy: 0.7375 - val_loss: 1.2390 - learning_rate: 0.0010
+Epoch 12/80
+160/160 - 1s - 3ms/step - accuracy: 0.4440 - loss: 2.2803 - val_accuracy: 0.7378 - val_loss: 1.2207 - learning_rate: 0.0010
+Epoch 13/80
+160/160 - 1s - 3ms/step - accuracy: 0.4541 - loss: 2.2658 - val_accuracy: 0.7433 - val_loss: 1.2199 - learning_rate: 0.0010
+Epoch 14/80
+160/160 - 1s - 3ms/step - accuracy: 0.4594 - loss: 2.2485 - val_accuracy: 0.7539 - val_loss: 1.2042 - learning_rate: 0.0010
+Epoch 15/80
+160/160 - 0s - 3ms/step - accuracy: 0.4640 - loss: 2.2430 - val_accuracy: 0.7494 - val_loss: 1.1892 - learning_rate: 0.0010
+Epoch 16/80
+160/160 - 1s - 3ms/step - accuracy: 0.4697 - loss: 2.2279 - val_accuracy: 0.7703 - val_loss: 1.1127 - learning_rate: 0.0010
+Epoch 17/80
+160/160 - 0s - 3ms/step - accuracy: 0.4753 - loss: 2.2065 - val_accuracy: 0.7608 - val_loss: 1.1316 - learning_rate: 0.0010
+Epoch 18/80
+160/160 - 1s - 3ms/step - accuracy: 0.4819 - loss: 2.1979 - val_accuracy: 0.7744 - val_loss: 1.1015 - learning_rate: 0.0010
+Epoch 19/80
+160/160 - 1s - 3ms/step - accuracy: 0.4834 - loss: 2.1884 - val_accuracy: 0.7847 - val_loss: 1.0788 - learning_rate: 0.0010
+Epoch 20/80
+160/160 - 0s - 3ms/step - accuracy: 0.4892 - loss: 2.1788 - val_accuracy: 0.7814 - val_loss: 1.0836 - learning_rate: 0.0010
+Epoch 21/80
+160/160 - 1s - 3ms/step - accuracy: 0.4941 - loss: 2.1619 - val_accuracy: 0.7906 - val_loss: 1.0565 - learning_rate: 0.0010
+Epoch 22/80
+160/160 - 1s - 3ms/step - accuracy: 0.4979 - loss: 2.1535 - val_accuracy: 0.7950 - val_loss: 1.0450 - learning_rate: 0.0010
+Epoch 23/80
+160/160 - 0s - 3ms/step - accuracy: 0.5027 - loss: 2.1444 - val_accuracy: 0.7736 - val_loss: 1.0677 - learning_rate: 0.0010
+Epoch 24/80
+160/160 - 1s - 3ms/step - accuracy: 0.5014 - loss: 2.1463 - val_accuracy: 0.8014 - val_loss: 1.0337 - learning_rate: 0.0010
+Epoch 25/80
+160/160 - 1s - 3ms/step - accuracy: 0.5093 - loss: 2.1315 - val_accuracy: 0.8047 - val_loss: 1.0275 - learning_rate: 0.0010
+Epoch 26/80
+160/160 - 0s - 3ms/step - accuracy: 0.5075 - loss: 2.1323 - val_accuracy: 0.7961 - val_loss: 1.0128 - learning_rate: 0.0010
+Epoch 27/80
+160/160 - 0s - 3ms/step - accuracy: 0.5072 - loss: 2.1244 - val_accuracy: 0.7922 - val_loss: 1.0250 - learning_rate: 0.0010
+Epoch 28/80
+160/160 - 0s - 3ms/step - accuracy: 0.5137 - loss: 2.1111 - val_accuracy: 0.7967 - val_loss: 1.0389 - learning_rate: 0.0010
+Epoch 29/80
+160/160 - 1s - 3ms/step - accuracy: 0.5157 - loss: 2.1144 - val_accuracy: 0.8061 - val_loss: 1.0024 - learning_rate: 0.0010
+Epoch 30/80
+160/160 - 0s - 3ms/step - accuracy: 0.5172 - loss: 2.1041 - val_accuracy: 0.8042 - val_loss: 0.9893 - learning_rate: 0.0010
+Epoch 31/80
+160/160 - 1s - 3ms/step - accuracy: 0.5199 - loss: 2.0983 - val_accuracy: 0.8069 - val_loss: 0.9891 - learning_rate: 0.0010
+Epoch 32/80
+160/160 - 1s - 3ms/step - accuracy: 0.5206 - loss: 2.0877 - val_accuracy: 0.8122 - val_loss: 0.9822 - learning_rate: 0.0010
+Epoch 33/80
+160/160 - 1s - 3ms/step - accuracy: 0.5276 - loss: 2.0869 - val_accuracy: 0.8206 - val_loss: 0.9562 - learning_rate: 0.0010
+Epoch 34/80
+160/160 - 0s - 3ms/step - accuracy: 0.5218 - loss: 2.0851 - val_accuracy: 0.8153 - val_loss: 0.9600 - learning_rate: 0.0010
+Epoch 35/80
+160/160 - 0s - 3ms/step - accuracy: 0.5235 - loss: 2.0828 - val_accuracy: 0.8125 - val_loss: 0.9668 - learning_rate: 0.0010
+Epoch 36/80
+160/160 - 0s - 3ms/step - accuracy: 0.5250 - loss: 2.0796 - val_accuracy: 0.8164 - val_loss: 0.9596 - learning_rate: 0.0010
+Epoch 37/80
+160/160 - 1s - 3ms/step - accuracy: 0.5340 - loss: 2.0681 - val_accuracy: 0.8247 - val_loss: 0.9401 - learning_rate: 0.0010
+Epoch 38/80
+160/160 - 0s - 3ms/step - accuracy: 0.5334 - loss: 2.0576 - val_accuracy: 0.8233 - val_loss: 0.9307 - learning_rate: 0.0010
+Epoch 39/80
+160/160 - 0s - 3ms/step - accuracy: 0.5341 - loss: 2.0549 - val_accuracy: 0.8225 - val_loss: 0.9337 - learning_rate: 0.0010
+Epoch 40/80
+160/160 - 0s - 3ms/step - accuracy: 0.5350 - loss: 2.0542 - val_accuracy: 0.8217 - val_loss: 0.9544 - learning_rate: 0.0010
+Epoch 41/80
+160/160 - 1s - 3ms/step - accuracy: 0.5342 - loss: 2.0620 - val_accuracy: 0.8261 - val_loss: 0.9394 - learning_rate: 0.0010
+Epoch 42/80
+160/160 - 0s - 3ms/step - accuracy: 0.5455 - loss: 2.0349 - val_accuracy: 0.8217 - val_loss: 0.9366 - learning_rate: 0.0010
+Epoch 43/80
+160/160 - 1s - 3ms/step - accuracy: 0.5396 - loss: 2.0392 - val_accuracy: 0.8267 - val_loss: 0.9406 - learning_rate: 0.0010
+Epoch 44/80
+160/160 - 0s - 3ms/step - accuracy: 0.5441 - loss: 2.0349 - val_accuracy: 0.8236 - val_loss: 0.9530 - learning_rate: 0.0010
+Epoch 45/80
+160/160 - 0s - 3ms/step - accuracy: 0.5389 - loss: 2.0432 - val_accuracy: 0.8211 - val_loss: 0.9376 - learning_rate: 0.0010
+Epoch 46/80
+160/160 - 0s - 3ms/step - accuracy: 0.5427 - loss: 2.0336 - val_accuracy: 0.8214 - val_loss: 0.9311 - learning_rate: 0.0010
+Epoch 47/80
+160/160 - 1s - 3ms/step - accuracy: 0.5442 - loss: 2.0340 - val_accuracy: 0.8303 - val_loss: 0.9186 - learning_rate: 0.0010
+Epoch 48/80
+160/160 - 1s - 3ms/step - accuracy: 0.5440 - loss: 2.0336 - val_accuracy: 0.8308 - val_loss: 0.9234 - learning_rate: 0.0010
+Epoch 49/80
+160/160 - 0s - 3ms/step - accuracy: 0.5439 - loss: 2.0325 - val_accuracy: 0.8278 - val_loss: 0.9323 - learning_rate: 0.0010
+Epoch 50/80
+160/160 - 1s - 3ms/step - accuracy: 0.5485 - loss: 2.0209 - val_accuracy: 0.8331 - val_loss: 0.9125 - learning_rate: 0.0010
+Epoch 51/80
+160/160 - 1s - 3ms/step - accuracy: 0.5468 - loss: 2.0250 - val_accuracy: 0.8372 - val_loss: 0.9067 - learning_rate: 0.0010
+Epoch 52/80
+160/160 - 1s - 3ms/step - accuracy: 0.5478 - loss: 2.0153 - val_accuracy: 0.8383 - val_loss: 0.9004 - learning_rate: 0.0010
+Epoch 53/80
+160/160 - 0s - 3ms/step - accuracy: 0.5508 - loss: 2.0168 - val_accuracy: 0.8175 - val_loss: 0.9404 - learning_rate: 0.0010
+Epoch 54/80
+160/160 - 0s - 3ms/step - accuracy: 0.5474 - loss: 2.0190 - val_accuracy: 0.8372 - val_loss: 0.9031 - learning_rate: 0.0010
+Epoch 55/80
+160/160 - 0s - 3ms/step - accuracy: 0.5522 - loss: 1.9977 - val_accuracy: 0.8219 - val_loss: 0.9334 - learning_rate: 0.0010
+Epoch 56/80
+160/160 - 1s - 3ms/step - accuracy: 0.5516 - loss: 2.0061 - val_accuracy: 0.8400 - val_loss: 0.8942 - learning_rate: 0.0010
+Epoch 57/80
+160/160 - 0s - 3ms/step - accuracy: 0.5534 - loss: 2.0013 - val_accuracy: 0.8361 - val_loss: 0.9090 - learning_rate: 0.0010
+Epoch 58/80
+160/160 - 0s - 3ms/step - accuracy: 0.5518 - loss: 2.0031 - val_accuracy: 0.8336 - val_loss: 0.9105 - learning_rate: 0.0010
+Epoch 59/80
+160/160 - 1s - 3ms/step - accuracy: 0.5552 - loss: 2.0048 - val_accuracy: 0.8444 - val_loss: 0.8883 - learning_rate: 0.0010
+Epoch 60/80
+160/160 - 0s - 3ms/step - accuracy: 0.5514 - loss: 1.9960 - val_accuracy: 0.8417 - val_loss: 0.8980 - learning_rate: 0.0010
+Epoch 61/80
+160/160 - 0s - 3ms/step - accuracy: 0.5515 - loss: 1.9983 - val_accuracy: 0.8303 - val_loss: 0.9121 - learning_rate: 0.0010
+Epoch 62/80
+160/160 - 1s - 3ms/step - accuracy: 0.5520 - loss: 1.9988 - val_accuracy: 0.8450 - val_loss: 0.8830 - learning_rate: 0.0010
+Epoch 63/80
+160/160 - 0s - 3ms/step - accuracy: 0.5547 - loss: 1.9926 - val_accuracy: 0.8303 - val_loss: 0.9175 - learning_rate: 0.0010
+Epoch 64/80
+160/160 - 0s - 3ms/step - accuracy: 0.5610 - loss: 1.9741 - val_accuracy: 0.8358 - val_loss: 0.9126 - learning_rate: 0.0010
+Epoch 65/80
+160/160 - 0s - 3ms/step - accuracy: 0.5576 - loss: 1.9826 - val_accuracy: 0.8369 - val_loss: 0.9012 - learning_rate: 0.0010
+Epoch 66/80
+160/160 - 0s - 3ms/step - accuracy: 0.5590 - loss: 1.9817 - val_accuracy: 0.8356 - val_loss: 0.9139 - learning_rate: 0.0010
+Epoch 67/80
+160/160 - 0s - 3ms/step - accuracy: 0.5689 - loss: 1.9592 - val_accuracy: 0.8417 - val_loss: 0.8799 - learning_rate: 5.0000e-04
+Epoch 68/80
+160/160 - 0s - 3ms/step - accuracy: 0.5664 - loss: 1.9592 - val_accuracy: 0.8439 - val_loss: 0.8868 - learning_rate: 5.0000e-04
+Epoch 69/80
+160/160 - 1s - 3ms/step - accuracy: 0.5683 - loss: 1.9574 - val_accuracy: 0.8531 - val_loss: 0.8638 - learning_rate: 5.0000e-04
+Epoch 70/80
+160/160 - 0s - 3ms/step - accuracy: 0.5675 - loss: 1.9507 - val_accuracy: 0.8497 - val_loss: 0.8820 - learning_rate: 5.0000e-04
+Epoch 71/80
+160/160 - 0s - 3ms/step - accuracy: 0.5632 - loss: 1.9527 - val_accuracy: 0.8436 - val_loss: 0.8705 - learning_rate: 5.0000e-04
+Epoch 72/80
+160/160 - 0s - 3ms/step - accuracy: 0.5666 - loss: 1.9531 - val_accuracy: 0.8531 - val_loss: 0.8689 - learning_rate: 5.0000e-04
+Epoch 73/80
+160/160 - 1s - 3ms/step - accuracy: 0.5688 - loss: 1.9499 - val_accuracy: 0.8539 - val_loss: 0.8695 - learning_rate: 5.0000e-04
+Epoch 74/80
+160/160 - 0s - 3ms/step - accuracy: 0.5681 - loss: 1.9446 - val_accuracy: 0.8492 - val_loss: 0.8573 - learning_rate: 5.0000e-04
+Epoch 75/80
+160/160 - 0s - 3ms/step - accuracy: 0.5693 - loss: 1.9423 - val_accuracy: 0.8450 - val_loss: 0.8645 - learning_rate: 5.0000e-04
+Epoch 76/80
+160/160 - 0s - 3ms/step - accuracy: 0.5679 - loss: 1.9404 - val_accuracy: 0.8478 - val_loss: 0.8620 - learning_rate: 5.0000e-04
+Epoch 77/80
+160/160 - 0s - 3ms/step - accuracy: 0.5692 - loss: 1.9433 - val_accuracy: 0.8503 - val_loss: 0.8555 - learning_rate: 5.0000e-04
+Epoch 78/80
+160/160 - 0s - 3ms/step - accuracy: 0.5733 - loss: 1.9354 - val_accuracy: 0.8525 - val_loss: 0.8567 - learning_rate: 2.5000e-04
+Epoch 79/80
+160/160 - 0s - 3ms/step - accuracy: 0.5797 - loss: 1.9299 - val_accuracy: 0.8503 - val_loss: 0.8545 - learning_rate: 2.5000e-04
+Epoch 80/80
+160/160 - 0s - 3ms/step - accuracy: 0.5758 - loss: 1.9223 - val_accuracy: 0.8522 - val_loss: 0.8439 - learning_rate: 2.5000e-04
+[curves] wrote training_history.csv
+[curves] skipped PNG (No module named 'matplotlib'); CSV still saved -- `pip install matplotlib` to enable the plot
+
+[test] float accuracy = 0.8623
+[test] per-class accuracy:
+       answer         0.90  (n=200)
+       back           0.81  (n=200)
+       call           0.85  (n=200)
+       close          0.86  (n=200)
+       down           0.84  (n=200)
+       eight          0.88  (n=200)
+       five           0.84  (n=200)
+       four           0.89  (n=200)
+       go             0.57  (n=200)
+       help           0.79  (n=200)
+       left           0.78  (n=200)
+       next           0.94  (n=200)
+       nine           0.87  (n=200)
+       no             0.85  (n=200)
+       one            0.91  (n=200)
+       open           0.91  (n=200)
+       play           0.75  (n=200)
+       previous       0.95  (n=200)
+       record         0.85  (n=200)
+       right          0.91  (n=200)
+       search         0.90  (n=200)
+       seven          0.93  (n=200)
+       six            0.88  (n=200)
+       start          0.83  (n=200)
+       stop           0.91  (n=200)
+       three          0.90  (n=200)
+       two            0.88  (n=200)
+       up             0.88  (n=200)
+       yes            0.93  (n=200)
+       zero           0.91  (n=200)
+[test] top confusions (true -> pred):
+       go             -> no             45
+       start          -> stop           15
+       no             -> go             13
+       go             -> down           13
+       left           -> yes            12
+       help           -> back           11
+       down           -> no             11
+       call           -> help           11
+       play           -> open           10
+       search         -> start          9
+       play           -> call           9
+       six            -> eight          8
+[warn] matplotlib not installed — skipping confusion matrix PNG.
+Saved artifact at '/home/x-umajithia/ds-cnn/runs/latency_k4_c48_skip_w64d4/kws_tf_savedmodel'. The following endpoints are available:
+
+* Endpoint 'serve'
+  args_0 (POSITIONAL_ONLY): TensorSpec(shape=(None, 25, 48, 1), dtype=tf.float32, name='mfcc')
+Output Type:
+  TensorSpec(shape=(None, 30), dtype=tf.float32, name=None)
+Captures:
+  22682673065872: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673066064: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069136: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068560: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673067984: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068944: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673065680: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673067792: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069712: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068752: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069904: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433111248: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433111440: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069520: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068368: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112592: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113744: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113552: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113168: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114320: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112784: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115472: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115664: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114896: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112976: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114512: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114128: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113936: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115088: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116624: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116048: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116240: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116432: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115280: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117584: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117008: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117200: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117392: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112400: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118544: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118928: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119120: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118160: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118736: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119696: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118352: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119504: TensorSpec(shape=(), dtype=tf.resource, name=None)
+[export] SavedModel -> kws_tf_savedmodel/  (float, pre-quantization)
+Saved artifact at '/tmp/tmplzsbbttc'. The following endpoints are available:
+
+* Endpoint 'serve'
+  args_0 (POSITIONAL_ONLY): TensorSpec(shape=(None, 25, 48, 1), dtype=tf.float32, name='mfcc')
+Output Type:
+  TensorSpec(shape=(None, 30), dtype=tf.float32, name=None)
+Captures:
+  22682673065872: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673066064: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069136: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068560: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673067984: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068944: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673065680: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673067792: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069712: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068752: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069904: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433111248: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433111440: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069520: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068368: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112592: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113744: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113552: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113168: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114320: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112784: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115472: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115664: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114896: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112976: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114512: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114128: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113936: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115088: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116624: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116048: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116240: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116432: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115280: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117584: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117008: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117200: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117392: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112400: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118544: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118928: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119120: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118160: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118736: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119696: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118352: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119504: TensorSpec(shape=(), dtype=tf.resource, name=None)
+W0000 00:00:1795135184.286938 1509834 tf_tfl_flatbuffer_helpers.cc:364] Ignored output_format.
+W0000 00:00:1795135184.286960 1509834 tf_tfl_flatbuffer_helpers.cc:367] Ignored drop_control_dependency.
+I0000 00:00:1795135184.287250 1509834 reader.cc:83] Reading SavedModel from: /tmp/tmplzsbbttc
+I0000 00:00:1795135184.288752 1509834 reader.cc:52] Reading meta graph with tags { serve }
+I0000 00:00:1795135184.288764 1509834 reader.cc:147] Reading SavedModel debug info (if present) from: /tmp/tmplzsbbttc
+I0000 00:00:1795135184.300178 1509834 mlir_graph_optimization_pass.cc:437] MLIR V1 optimization pass is not enabled
+I0000 00:00:1795135184.302567 1509834 loader.cc:236] Restoring SavedModel bundle.
+I0000 00:00:1795135184.388231 1509834 loader.cc:220] Running initialization op on SavedModel bundle at path: /tmp/tmplzsbbttc
+I0000 00:00:1795135184.410092 1509834 loader.cc:471] SavedModel load for tags { serve }; Status: success: OK. Took 122848 microseconds.
+Saved artifact at '/tmp/tmpvt460zso'. The following endpoints are available:
+
+* Endpoint 'serve'
+  args_0 (POSITIONAL_ONLY): TensorSpec(shape=(None, 25, 48, 1), dtype=tf.float32, name='mfcc')
+Output Type:
+  TensorSpec(shape=(None, 30), dtype=tf.float32, name=None)
+Captures:
+  22682673065872: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673066064: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069136: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068560: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673067984: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068944: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673065680: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673067792: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069712: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068752: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069904: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433111248: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433111440: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673069520: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682673068368: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112592: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113744: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113552: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113168: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114320: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112784: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115472: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115664: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114896: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112976: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114512: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433114128: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433113936: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115088: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116624: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116048: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116240: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433116432: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433115280: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117584: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117008: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117200: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433117392: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433112400: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118544: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118928: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119120: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118160: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118736: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119696: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433118352: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  22682433119504: TensorSpec(shape=(), dtype=tf.resource, name=None)
+/home/x-umajithia/qatenv/lib/python3.12/site-packages/tensorflow/lite/python/convert.py:846: UserWarning: Statistics for quantized inputs were expected, but not specified; continuing anyway.
+  warnings.warn(
+W0000 00:00:1795135185.216993 1509834 tf_tfl_flatbuffer_helpers.cc:364] Ignored output_format.
+W0000 00:00:1795135185.217007 1509834 tf_tfl_flatbuffer_helpers.cc:367] Ignored drop_control_dependency.
+I0000 00:00:1795135185.217118 1509834 reader.cc:83] Reading SavedModel from: /tmp/tmpvt460zso
+I0000 00:00:1795135185.218546 1509834 reader.cc:52] Reading meta graph with tags { serve }
+I0000 00:00:1795135185.218556 1509834 reader.cc:147] Reading SavedModel debug info (if present) from: /tmp/tmpvt460zso
+I0000 00:00:1795135185.232274 1509834 loader.cc:236] Restoring SavedModel bundle.
+I0000 00:00:1795135185.316715 1509834 loader.cc:220] Running initialization op on SavedModel bundle at path: /tmp/tmpvt460zso
+I0000 00:00:1795135185.337612 1509834 loader.cc:471] SavedModel load for tags { serve }; Status: success: OK. Took 120500 microseconds.
+fully_quantize: 0, inference_type: 6, input_inference_type: INT8, output_inference_type: INT8
+W0000 00:00:1795135185.976448 1509834 flatbuffer_export.cc:3851] Skipping runtime version metadata in the model. This will be generated by the exporter.
+/home/x-umajithia/qatenv/lib/python3.12/site-packages/tensorflow/lite/python/interpreter.py:457: UserWarning:     Warning: tf.lite.Interpreter is deprecated and is scheduled for deletion in
+    TF 2.20. Please use the LiteRT interpreter from the ai_edge_litert package.
+    See the [migration guide](https://ai.google.dev/edge/litert/migration)
+    for details.
+    
+  warnings.warn(_INTERPRETER_DELETION_WARNING)
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+[export] kws_tf_float.tflite  (102 KB)
+[export] kws_tf_int8.tflite   (50 KB)
+
+[complexity] re-running with host-timed TFLite for calibrated MCU estimate:
+
+  ┌─ Model Complexity Report ──────────────────────────────────┐
+  │  Parameters   :       25,502                              │
+  │  MACs (manual  ):    6,631,296                              │
+  │  int8 size    :       30 KB  (weights + flatbuffer overhead)    │
+  │  nRF5340 est. :   1259.0 ms  host=0.1 ms × 14762x (calibrated from │
+  │  Input shape  :  (25, 48, 1)                              │
+  └────────────────────────────────────────────────────────────┘
+  pip install keras-flops  for better MAC counting
+[done] saved /home/x-umajithia/ds-cnn/runs/latency_k4_c48_skip_w64d4/kws_tf.keras, kws_tf.json, kws_tf_savedmodel/, kws_tf_float.tflite, kws_tf_int8.tflite
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1795135187.415497 1514135 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1795135187.459196 1514135 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX512_FP16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1795135188.540821 1514135 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1795135190.005216 1514135 gpu_device.cc:2043] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 78795 MB memory:  -> device: 0, name: NVIDIA H100 80GB HBM3, pci bus id: 0000:dc:00.0, compute capability: 9.0a
+[export] loading runs/latency_k4_c48_skip_w64d4/kws_tf.keras (Keras 3.15.1)
+[export] wrote runs/latency_k4_c48_skip_w64d4/kws_tf.weights.npz  (47 weight arrays)
+[export] wrote runs/latency_k4_c48_skip_w64d4/kws_tf.arch.json  -> {'arch': 'dscnn', 'input_shape': [25, 48, 1], 'n_classes': 30, 'width': 64, 'depth': 4, 'dropout': 0.2}
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1795135191.830762 1514303 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1795135191.871204 1514303 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX512_FP16 AVX_VNNI AMX_TILE AMX_INT8 AMX_BF16 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1795135192.790317 1514303 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1795135195.115711 1514303 gpu_device.cc:2043] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 78795 MB memory:  -> device: 0, name: NVIDIA H100 80GB HBM3, pci bus id: 0000:dc:00.0, compute capability: 9.0a
+[mfcc] frame_stride_ms overridden -> 40.0 ms
+[run] name=latency_k4_c48_skip_w64d4_qat  out_dir=/home/x-umajithia/ds-cnn/runs/latency_k4_c48_skip_w64d4_qat
+[dsp] MFCC backend: arm_f32  cache=mfcc_cache_sr16000_clip1000_stride40ms_c48.npz  clip=1000ms frames=25
+[data] 30 classes: answer, back, call, close, down, eight, five, four, go, help, left, next, nine, no, one, open, play, previous, record, right, search, seven, six, start, stop, three, two, up, yes, zero
+[cache] loaded mfcc_cache_sr16000_clip1000_stride40ms_c48.npz  X=(30000, 25, 48)  dsp=arm_f32
+[data] train=20400 val=3600 test=6000 feat_shape=(25, 48, 1)
+[model] fine-tuning from runs/latency_k4_c48_skip_w64d4/kws_tf.keras
+[model] load_model failed (TypeError); using weights bundle kws_tf.weights.npz
+[model] rebuilt dscnn (width=64, depth=4) and loaded 47 weight arrays from kws_tf.weights.npz
+[model] params=25,502  est_int8≈30 KB  (nRF5340 budget ≈234 KB)
+
+  ┌─ Model Complexity Report ──────────────────────────────────┐
+  │  Parameters   :       25,502                              │
+  │  MACs (manual  ):    6,631,296                              │
+  │  int8 size    :       30 KB  (weights + flatbuffer overhead)    │
+  │  nRF5340 est. :    174.5 ms  MAC-based estimate (manual, 38M MACs/s│
+  │  Input shape  :  (25, 48, 1)                              │
+  └────────────────────────────────────────────────────────────┘
+  pip install keras-flops  for better MAC counting
+Model: "kws_dscnn"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ mfcc (InputLayer)           [(None, 25, 48, 1)]       0         
+                                                                 
+ conv2d (Conv2D)             (None, 13, 24, 64)        2560      
+                                                                 
+ batch_normalization (Batch  (None, 13, 24, 64)        256       
+ Normalization)                                                  
+                                                                 
+ re_lu (ReLU)                (None, 13, 24, 64)        0         
+                                                                 
+ depthwise_conv2d (Depthwis  (None, 13, 24, 64)        576       
+ eConv2D)                                                        
+                                                                 
+ batch_normalization_1 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_1 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ conv2d_1 (Conv2D)           (None, 13, 24, 64)        4096      
+                                                                 
+ batch_normalization_2 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_2 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ depthwise_conv2d_1 (Depthw  (None, 13, 24, 64)        576       
+ iseConv2D)                                                      
+                                                                 
+ batch_normalization_3 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_3 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ conv2d_2 (Conv2D)           (None, 13, 24, 64)        4096      
+                                                                 
+ batch_normalization_4 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_4 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ depthwise_conv2d_2 (Depthw  (None, 13, 24, 64)        576       
+ iseConv2D)                                                      
+                                                                 
+ batch_normalization_5 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_5 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ conv2d_3 (Conv2D)           (None, 13, 24, 64)        4096      
+                                                                 
+ batch_normalization_6 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_6 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ depthwise_conv2d_3 (Depthw  (None, 13, 24, 64)        576       
+ iseConv2D)                                                      
+                                                                 
+ batch_normalization_7 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_7 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ conv2d_4 (Conv2D)           (None, 13, 24, 64)        4096      
+                                                                 
+ batch_normalization_8 (Bat  (None, 13, 24, 64)        256       
+ chNormalization)                                                
+                                                                 
+ re_lu_8 (ReLU)              (None, 13, 24, 64)        0         
+                                                                 
+ average_pooling2d (Average  (None, 1, 1, 64)          0         
+ Pooling2D)                                                      
+                                                                 
+ flatten (Flatten)           (None, 64)                0         
+                                                                 
+ dropout (Dropout)           (None, 64)                0         
+                                                                 
+ scores (Dense)              (None, 30)                1950      
+                                                                 
+=================================================================
+Total params: 25502 (99.62 KB)
+Trainable params: 24350 (95.12 KB)
+Non-trainable params: 1152 (4.50 KB)
+_________________________________________________________________
+I0000 00:00:1795135196.975342 1514411 cuda_dnn.cc:461] Loaded cuDNN version 92700
+[train] arch=dscnn width=64 depth=4 sr=16000 stride=40.0ms frames=25 mixup=0.0 label_smoothing=0.0 init=runs/latency_k4_c48_skip_w64d4/kws_tf.keras
+
+[test] float accuracy = 0.8622
+
+[qat] wrapping with fake-quant + fine-tuning (5 epochs @ lr=0.0002)
+Epoch 1/5
+I0000 00:00:1795135201.681716 1514405 service.cc:153] XLA service 0x14eedae404a0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+I0000 00:00:1795135201.681737 1514405 service.cc:161]   StreamExecutor [0]: NVIDIA H100 80GB HBM3, Compute Capability 9.0a (Driver: 13.4.0; Runtime: 12.9.0; Toolkit: 12.5.0; DNN: 9.27.0)
+I0000 00:00:1795135201.685704 1514405 dump_mlir_util.cc:269] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+I0000 00:00:1795135201.762015 1514405 device_compiler.h:208] Compiled cluster using XLA!  This line is logged at most once for the lifetime of the process.
+160/160 - 6s - loss: 1.5344 - accuracy: 0.5891 - val_loss: 0.6201 - val_accuracy: 0.8317 - 6s/epoch - 39ms/step
+Epoch 2/5
+160/160 - 2s - loss: 1.3223 - accuracy: 0.6184 - val_loss: 0.5328 - val_accuracy: 0.8425 - 2s/epoch - 9ms/step
+Epoch 3/5
+160/160 - 1s - loss: 1.2796 - accuracy: 0.6214 - val_loss: 0.5128 - val_accuracy: 0.8497 - 1s/epoch - 9ms/step
+Epoch 4/5
+160/160 - 1s - loss: 1.2716 - accuracy: 0.6202 - val_loss: 0.5079 - val_accuracy: 0.8489 - 1s/epoch - 9ms/step
+Epoch 5/5
+160/160 - 1s - loss: 1.2610 - accuracy: 0.6200 - val_loss: 0.4891 - val_accuracy: 0.8525 - 1s/epoch - 9ms/step
+[qat] post-QAT accuracy = 0.8668
+[test] per-class accuracy:
+       answer         0.90  (n=200)
+       back           0.83  (n=200)
+       call           0.85  (n=200)
+       close          0.88  (n=200)
+       down           0.83  (n=200)
+       eight          0.90  (n=200)
+       five           0.82  (n=200)
+       four           0.87  (n=200)
+       go             0.61  (n=200)
+       help           0.81  (n=200)
+       left           0.86  (n=200)
+       next           0.93  (n=200)
+       nine           0.86  (n=200)
+       no             0.82  (n=200)
+       one            0.91  (n=200)
+       open           0.94  (n=200)
+       play           0.80  (n=200)
+       previous       0.95  (n=200)
+       record         0.85  (n=200)
+       right          0.88  (n=200)
+       search         0.89  (n=200)
+       seven          0.93  (n=200)
+       six            0.88  (n=200)
+       start          0.81  (n=200)
+       stop           0.90  (n=200)
+       three          0.91  (n=200)
+       two            0.88  (n=200)
+       up             0.88  (n=200)
+       yes            0.93  (n=200)
+       zero           0.90  (n=200)
+[test] top confusions (true -> pred):
+       go             -> no             40
+       start          -> stop           16
+       no             -> go             15
+       record         -> open           12
+       play           -> open           12
+       down           -> no             12
+       help           -> back           11
+       zero           -> two            10
+       go             -> down           10
+       nine           -> down           9
+       help           -> open           9
+       four           -> go             9
+[warn] matplotlib not installed — skipping confusion matrix PNG.
+Saved artifact at '/home/x-umajithia/ds-cnn/runs/latency_k4_c48_skip_w64d4_qat/kws_tf_savedmodel'. The following endpoints are available:
+
+* Endpoint 'serve'
+  args_0 (POSITIONAL_ONLY): TensorSpec(shape=(None, 25, 48, 1), dtype=tf.float32, name='mfcc')
+Output Type:
+  TensorSpec(shape=(None, 30), dtype=tf.float32, name=None)
+Captures:
+  23029457814736: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457814928: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029461958288: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457814544: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457815888: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533280400: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533280016: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533280976: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533281936: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457818576: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457818000: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533279632: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457819152: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457817616: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533279824: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533279440: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533281168: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533281360: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457820496: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457820688: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533280592: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457819344: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457821264: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533280784: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533281744: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533278288: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533280208: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457822032: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457822224: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533555984: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457821648: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457822608: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533556176: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533555600: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533556560: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533556368: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457823376: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457823568: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533554064: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457819728: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457823952: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533278480: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029533541776: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458627152: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458627728: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457824720: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457824912: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458628304: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457824336: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457825296: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458628112: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458628496: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458627344: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458627536: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457826064: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457826256: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458629264: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457822992: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457826640: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458629840: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458629456: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458628688: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458627920: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457827408: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457827600: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458630224: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457827024: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457827984: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458630032: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458630416: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458629648: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458628880: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457828752: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457828944: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458631184: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457825680: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029457829328: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458631760: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458631376: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458630608: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458629072: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455716816: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455717008: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455717392: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455717584: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458632144: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455718352: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455718544: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029458632528: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455718928: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  23029455719120: TensorSpec(shape=(), dtype=tf.resource, name=None)
+W0000 00:00:1795135216.806238 1514303 tf_tfl_flatbuffer_helpers.cc:364] Ignored output_format.
+W0000 00:00:1795135216.806259 1514303 tf_tfl_flatbuffer_helpers.cc:367] Ignored drop_control_dependency.
+I0000 00:00:1795135216.806524 1514303 reader.cc:83] Reading SavedModel from: /tmp/tmp924z08de
+I0000 00:00:1795135216.813144 1514303 reader.cc:52] Reading meta graph with tags { serve }
+I0000 00:00:1795135216.813155 1514303 reader.cc:147] Reading SavedModel debug info (if present) from: /tmp/tmp924z08de
+I0000 00:00:1795135216.847638 1514303 mlir_graph_optimization_pass.cc:437] MLIR V1 optimization pass is not enabled
+I0000 00:00:1795135216.853496 1514303 loader.cc:236] Restoring SavedModel bundle.
+I0000 00:00:1795135217.021478 1514303 loader.cc:220] Running initialization op on SavedModel bundle at path: /tmp/tmp924z08de
+I0000 00:00:1795135217.065505 1514303 loader.cc:471] SavedModel load for tags { serve }; Status: success: OK. Took 258990 microseconds.
+/home/x-umajithia/qatenv/lib/python3.12/site-packages/tensorflow/lite/python/convert.py:846: UserWarning: Statistics for quantized inputs were expected, but not specified; continuing anyway.
+  warnings.warn(
+W0000 00:00:1795135221.572114 1514303 tf_tfl_flatbuffer_helpers.cc:364] Ignored output_format.
+W0000 00:00:1795135221.572140 1514303 tf_tfl_flatbuffer_helpers.cc:367] Ignored drop_control_dependency.
+I0000 00:00:1795135221.572273 1514303 reader.cc:83] Reading SavedModel from: /tmp/tmpl0pu0yw0
+I0000 00:00:1795135221.581044 1514303 reader.cc:52] Reading meta graph with tags { serve }
+I0000 00:00:1795135221.581066 1514303 reader.cc:147] Reading SavedModel debug info (if present) from: /tmp/tmpl0pu0yw0
+I0000 00:00:1795135221.622714 1514303 loader.cc:236] Restoring SavedModel bundle.
+I0000 00:00:1795135221.796908 1514303 loader.cc:220] Running initialization op on SavedModel bundle at path: /tmp/tmpl0pu0yw0
+I0000 00:00:1795135221.843590 1514303 loader.cc:471] SavedModel load for tags { serve }; Status: success: OK. Took 271359 microseconds.
+fully_quantize: 0, inference_type: 6, input_inference_type: INT8, output_inference_type: INT8
+W0000 00:00:1795135222.202186 1514303 flatbuffer_export.cc:3851] Skipping runtime version metadata in the model. This will be generated by the exporter.
+/home/x-umajithia/qatenv/lib/python3.12/site-packages/tensorflow/lite/python/interpreter.py:457: UserWarning:     Warning: tf.lite.Interpreter is deprecated and is scheduled for deletion in
+    TF 2.20. Please use the LiteRT interpreter from the ai_edge_litert package.
+    See the [migration guide](https://ai.google.dev/edge/litert/migration)
+    for details.
+    
+  warnings.warn(_INTERPRETER_DELETION_WARNING)
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+[export] SavedModel -> kws_tf_savedmodel/  (float, pre-quantization)
+[export] kws_tf_float.tflite  (117 KB)
+[export] kws_tf_int8.tflite   (47 KB)
+
+[complexity] re-running with host-timed TFLite for calibrated MCU estimate:
+
+  ┌─ Model Complexity Report ──────────────────────────────────┐
+  │  Parameters   :       26,208                              │
+  │  MACs (manual  ):            0                              │
+  │  int8 size    :       31 KB  (weights + flatbuffer overhead)    │
+  │  nRF5340 est. :   1259.0 ms  host=0.4 ms × 3043x (calibrated from n│
+  │  Input shape  :  (25, 48, 1)                              │
+  └────────────────────────────────────────────────────────────┘
+  pip install keras-flops  for better MAC counting
+[done] saved /home/x-umajithia/ds-cnn/runs/latency_k4_c48_skip_w64d4_qat/kws_tf.keras, kws_tf.json, kws_tf_savedmodel/, kws_tf_float.tflite, kws_tf_int8.tflite
