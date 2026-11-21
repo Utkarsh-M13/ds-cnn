@@ -330,7 +330,11 @@ def split_indices(n: int, seed: int, val_frac=0.15, test_frac=0.15):
 
 def make_augmenter(n_frames: int, n_coeffs: int = 10, max_shift: int = 8,
                    max_time_mask: int = 16, max_freq_mask: int = 3,
-                   noise_std: float = 0.12):
+                   noise_std: float = 0.12, n_cols: int | None = None):
+    # n_cols > n_coeffs: extra trailing columns (distillation teacher features)
+    # get time shift, time mask and noise, but no freq mask.
+    n_pad = 0 if n_cols is None else n_cols - n_coeffs
+
     def augment(x, y):
         # x: (frames, coeffs, 1)
         # -- time shift --
@@ -349,6 +353,8 @@ def make_augmenter(n_frames: int, n_coeffs: int = 10, max_shift: int = 8,
         fw = tf.random.uniform([], 0, max_freq_mask + 1, dtype=tf.int32)
         f_keep = tf.logical_or(tf.range(n_coeffs) < f0,
                                tf.range(n_coeffs) >= f0 + fw)
+        if n_pad > 0:
+            f_keep = tf.concat([f_keep, tf.ones([n_pad], tf.bool)], axis=0)
         x = x * tf.cast(f_keep, x.dtype)[None, :, None]
 
         # -- small additive noise --
@@ -946,6 +952,15 @@ def main() -> None:
                     help="Epochs for the QAT fine-tune phase (default 5).")
     ap.add_argument("--qat-lr", type=float, default=2e-4,
                     help="Learning rate for the QAT fine-tune (small; default 2e-4).")
+    ap.add_argument("--kd-teacher", default=None,
+                    help="Float .keras teacher for knowledge distillation (float "
+                         "training only). Its kws_tf.json must sit next to it. The "
+                         "teacher may use more MFCC coefficients than the student; "
+                         "the student then uses the first --num-mfcc of them.")
+    ap.add_argument("--kd-alpha", type=float, default=0.5,
+                    help="Weight of the distillation term (0..1). Default 0.5.")
+    ap.add_argument("--kd-temp", type=float, default=4.0,
+                    help="Softmax temperature for distillation. Default 4.")
     ap.add_argument("--allow-large", action="store_true",
                     help="Allow models above the nRF5340 size budget.")
     ap.add_argument("--init", default=None,
@@ -1022,6 +1037,34 @@ def main() -> None:
     # for both tf.signal and CMSIS-DSP backends.
     p, frontend = make_frontend(cfg, p=p)
 
+    # ---- distillation teacher: load features wide enough for it ------------
+    # CMSIS dctMatrix rows do not depend on the DCT count, so the first n MFCCs
+    # of a c48 cache equal a c13 cache: one cache feeds student and teacher.
+    teacher_meta = None
+    p_load, frontend_load = p, frontend
+    if args.kd_teacher:
+        if args.qat or args.init or args.epochs <= 0:
+            raise SystemExit("[error] --kd-teacher is for float training only "
+                             "(no --qat, --init or --epochs 0). Run QAT separately.")
+        t_json = Path(args.kd_teacher).with_suffix(".json")
+        if not t_json.exists():
+            raise SystemExit(f"[error] teacher metadata not found: {t_json}")
+        teacher_meta = json.loads(t_json.read_text())
+        t_mfcc = teacher_meta["mfcc"]
+        if int(t_mfcc["num_frames"]) != p.num_frames:
+            raise SystemExit(f"[error] teacher has {t_mfcc['num_frames']} frames, "
+                             f"student has {p.num_frames}.")
+        if int(t_mfcc["num_mfcc"]) < p.num_mfcc:
+            raise SystemExit(f"[error] teacher uses {t_mfcc['num_mfcc']} MFCCs, "
+                             f"fewer than the student's {p.num_mfcc}.")
+        if int(t_mfcc["num_mfcc"]) > p.num_mfcc:
+            p_load = MFCCParams(cfg, sample_rate=args.sample_rate,
+                                frame_stride_ms=args.frame_stride_ms,
+                                num_mfcc=int(t_mfcc["num_mfcc"]))
+            p_load, frontend_load = make_frontend(cfg, p=p_load)
+        print(f"[kd] teacher={args.kd_teacher} mfcc={t_mfcc['num_mfcc']} "
+              f"alpha={args.kd_alpha} temp={args.kd_temp}")
+
     # ---- output directory ------------------------------------------------
     if args.run_name is None:
         sr_tag = "" if args.sample_rate is None else f"_sr{args.sample_rate}"
@@ -1046,7 +1089,7 @@ def main() -> None:
     noise_str = (f"_noise{args.noise_copies}x{args.snr_min:g}-{args.snr_max:g}dB"
                  if args.noise_aug else "")
     cache_path = PROJECT_ROOT / (
-        f"mfcc_cache_sr{p.sample_rate}_clip{clip_ms}_stride{stride_ms_str}ms_c{p.num_mfcc}"
+        f"mfcc_cache_sr{p.sample_rate}_clip{clip_ms}_stride{stride_ms_str}ms_c{p_load.num_mfcc}"
         f"{noise_str}.npz"
     )
     print(f"[dsp] MFCC backend: {backend}  cache={cache_path.name}  "
@@ -1066,9 +1109,16 @@ def main() -> None:
         if not args.rebuild_cache:
             print("[warn] --noise-aug only applies while (re)building the cache; "
                   "add --rebuild-cache to bake noisy clips in.")
-    X, y, split = load_features(root, labels, p, seed, frontend, cache_path,
+    X, y, split = load_features(root, labels, p_load, seed, frontend_load, cache_path,
                                 backend=backend,
                                 rebuild=args.rebuild_cache, noise_aug=noise_aug_cfg)
+    Xt = None
+    if teacher_meta is not None:
+        # Teacher input: its own coefficient count and its own train-set stats.
+        t_norm = teacher_meta["feature_norm"]
+        Xt = X[..., :int(teacher_meta["mfcc"]["num_mfcc"])]
+        Xt = ((Xt - t_norm["mean"]) / t_norm["std"]).astype(np.float32)[..., None]
+        X = X[..., :p.num_mfcc]
 
     # Split: prefer the clip-level split stored in the cache (keeps noisy copies
     # out of val/test); fall back to a random row split for older caches.
@@ -1099,17 +1149,25 @@ def main() -> None:
           f"feat_shape={Xtr.shape[1:]}")
 
     # --- data pipelines (augment only the training set) ---
+    # With a teacher, each example carries student and teacher columns side by
+    # side, so augmentation and mixup hit both the same way.
+    Xtr_in, Xva_in = Xtr, Xva
+    if Xt is not None:
+        Xtr_in = np.concatenate([Xtr, Xt[tr_idx]], axis=2)
+        Xva_in = np.concatenate([Xva, Xt[va_idx]], axis=2)
+        del Xt
     augmenter = None if args.no_augment else make_augmenter(
         p.num_frames, n_coeffs=p.num_mfcc,
         max_shift=args.aug_shift, max_time_mask=args.aug_time_mask,
-        max_freq_mask=args.aug_freq_mask, noise_std=args.aug_noise_std)
+        max_freq_mask=args.aug_freq_mask, noise_std=args.aug_noise_std,
+        n_cols=Xtr_in.shape[2])
     use_mixup = args.mixup > 0 and not args.smoke
     train_ds = make_dataset(
-        Xtr, ytr, args.batch_size, training=True, seed=train_seed,
+        Xtr_in, ytr, args.batch_size, training=True, seed=train_seed,
         augmenter=augmenter, mixup_alpha=args.mixup if use_mixup else 0.0,
         n_classes=len(labels),
     )
-    val_ds = make_dataset(Xva, yva, args.batch_size, training=False, seed=seed)
+    val_ds = make_dataset(Xva_in, yva, args.batch_size, training=False, seed=seed)
 
     # --- model ---
     if args.init:
@@ -1182,26 +1240,77 @@ def main() -> None:
         optimizer = tf.keras.optimizers.AdamW(args.lr, weight_decay=args.weight_decay)
     else:
         optimizer = tf.keras.optimizers.Adam(args.lr)
-    model.compile(
-        optimizer=optimizer,
-        loss=loss,
-        metrics=["accuracy"],
-    )
+    student = model
+    if teacher_meta is not None:
+        # Train a wrapper: input = [student cols | teacher cols], output =
+        # [student probs | frozen teacher probs]. Only the student learns.
+        teacher = tf.keras.models.load_model(args.kd_teacher, compile=False)
+        # Same builder => same model name as the student; rename via a wrapper.
+        teacher = tf.keras.Model(teacher.input, teacher.output, name="kd_teacher")
+        teacher.trainable = False
+        n_cls, n_s = len(labels), p.num_mfcc
+        kd_in = tf.keras.Input(shape=Xtr_in.shape[1:])
+        s_out = student(kd_in[:, :, :n_s, :])
+        t_out = teacher(kd_in[:, :, n_s:, :], training=False)
+        model = tf.keras.Model(
+            kd_in, tf.keras.layers.Concatenate()([s_out, t_out]), name="kd_wrapper")
+        alpha, temp = float(args.kd_alpha), float(args.kd_temp)
+
+        def kd_loss(y_true, y_pred):
+            s, t = y_pred[:, :n_cls], y_pred[:, n_cls:]
+            # Per-sample terms, so Keras still applies any sample weights.
+            if use_categorical:
+                hard = tf.keras.losses.categorical_crossentropy(
+                    y_true, s, label_smoothing=args.label_smoothing)
+            else:
+                hard = tf.keras.losses.sparse_categorical_crossentropy(y_true, s)
+            # Both models end in softmax; softmax(log(p)/T) == softmax(logits/T).
+            log_s = tf.nn.log_softmax(tf.math.log(tf.clip_by_value(s, 1e-7, 1.0)) / temp)
+            log_t = tf.nn.log_softmax(tf.math.log(tf.clip_by_value(t, 1e-7, 1.0)) / temp)
+            kl = tf.reduce_sum(tf.exp(log_t) * (log_t - log_s), axis=-1)
+            return (1.0 - alpha) * hard + alpha * temp * temp * kl
+
+        def student_accuracy(y_true, y_pred):
+            if y_true.shape.rank == 1 or y_true.shape[-1] == 1:
+                return tf.keras.metrics.sparse_categorical_accuracy(y_true, y_pred[:, :n_cls])
+            return tf.keras.metrics.categorical_accuracy(y_true, y_pred[:, :n_cls])
+
+        kd_metric = tf.keras.metrics.MeanMetricWrapper(student_accuracy, name="accuracy")
+        model.compile(optimizer=optimizer, loss=kd_loss, metrics=[kd_metric])
+    else:
+        model.compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=["accuracy"],
+        )
     model.summary()
     taper_str = f"→{args.width_taper}" if args.width_taper else ""
     print(f"[train] arch={args.arch} width={args.width}{taper_str} depth={args.depth} "
           f"sr={p.sample_rate} stride={p.frame_stride_ms}ms frames={p.num_frames} "
           f"mixup={args.mixup} label_smoothing={args.label_smoothing} "
           f"lr={args.lr} schedule={args.lr_schedule} warmup={args.warmup_epochs} "
-          f"weight_decay={args.weight_decay} train_seed={train_seed} init={args.init}")
+          f"weight_decay={args.weight_decay} train_seed={train_seed} init={args.init} "
+          f"kd_teacher={args.kd_teacher}")
 
     # Output naming: --tag keeps extra artifacts side by side; keras lives in run_dir.
     base = f"kws_tf_{args.tag}" if args.tag else "kws_tf"
     ckpt = Path(args.out)
-    callbacks = [
-        tf.keras.callbacks.ModelCheckpoint(
-            str(ckpt), monitor="val_accuracy", save_best_only=True),
-    ]
+    if teacher_meta is not None:
+        class _SaveStudent(tf.keras.callbacks.Callback):
+            """Save only the student (not the KD wrapper) at the best val epoch."""
+            best = -1.0
+
+            def on_epoch_end(self, epoch, logs=None):
+                acc = (logs or {}).get("val_accuracy", -1.0)
+                if acc > self.best:
+                    self.best = acc
+                    student.save(str(ckpt))
+        callbacks = [_SaveStudent()]
+    else:
+        callbacks = [
+            tf.keras.callbacks.ModelCheckpoint(
+                str(ckpt), monitor="val_accuracy", save_best_only=True),
+        ]
     if args.lr_schedule == "cosine":
         def cosine_lr(epoch, _lr):
             if epoch < args.warmup_epochs:
@@ -1217,7 +1326,8 @@ def main() -> None:
             monitor="val_accuracy", factor=0.5, patience=4, min_lr=1e-6))
         stop_patience = 16
     callbacks.append(tf.keras.callbacks.EarlyStopping(
-        monitor="val_accuracy", patience=stop_patience, restore_best_weights=True))
+        monitor="val_accuracy", mode="max", patience=stop_patience,
+        restore_best_weights=True))
 
     # Skip float training when --epochs 0 (e.g. QAT-only on a loaded checkpoint).
     if args.epochs > 0:
@@ -1230,6 +1340,13 @@ def main() -> None:
         )
         # --- loss / accuracy convergence curves (CSV + PNG) ---
         save_training_curves(history, run_dir, tag=args.tag)
+
+    if teacher_meta is not None:
+        # EarlyStopping restored the best wrapper weights, which the student
+        # shares. Continue (evaluate, export) with the plain student.
+        model = student
+        model.compile(optimizer=tf.keras.optimizers.Adam(args.lr), loss=loss,
+                      metrics=["accuracy"])
 
     # --- evaluate on held-out test set ---
     te_loss, te_acc = model.evaluate(Xte_eval, yte_eval, verbose=0)
@@ -1312,6 +1429,9 @@ def main() -> None:
             "lr": args.lr, "lr_schedule": args.lr_schedule,
             "warmup_epochs": args.warmup_epochs, "weight_decay": args.weight_decay,
             "train_seed": train_seed,
+            "kd_teacher": args.kd_teacher,
+            "kd_alpha": args.kd_alpha if args.kd_teacher else None,
+            "kd_temp": args.kd_temp if args.kd_teacher else None,
         },
         "int8_tflite": int8_path.name,
         "saved_model_dir": sm_dir.name,
